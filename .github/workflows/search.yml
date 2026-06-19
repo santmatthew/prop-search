@@ -1,0 +1,86 @@
+name: Property search
+
+# Run from your phone: GitHub -> Actions tab -> "Property search" -> Run workflow.
+# Fill in the destination and max minutes, run it, then download the
+# "results" artifact (results.csv / results.json) from the finished run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      destination:
+        description: "Commute destination (address or 'lat,lng')"
+        required: true
+        default: "Calle del General Díaz Porlier, 25, Salamanca, 28001 Madrid, Spain"
+      max_minutes:
+        description: "Max public-transport minutes (arrive by 9am weekday)"
+        required: true
+        default: "25"
+      no_transit:
+        description: "Skip the transit step (location filter only)"
+        type: boolean
+        default: false
+      max_price:
+        description: "Override max price (euros). Blank = default 380000"
+        required: false
+      min_size:
+        description: "Override min size (m2). Blank = default 70"
+        required: false
+      max_centre_km:
+        description: "Override max distance from centre (km). Blank = default 6"
+        required: false
+      exclude_id:
+        description: "Extra idealista property code to exclude"
+        required: false
+      exclude_area:
+        description: "Extra neighborhood/area to exclude"
+        required: false
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run property search
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          DESTINATION: ${{ inputs.destination }}
+          MAX_MINUTES: ${{ inputs.max_minutes }}
+          NO_TRANSIT: ${{ inputs.no_transit }}
+          MAX_PRICE: ${{ inputs.max_price }}
+          MIN_SIZE: ${{ inputs.min_size }}
+          MAX_CENTRE_KM: ${{ inputs.max_centre_km }}
+          EXCLUDE_ID: ${{ inputs.exclude_id }}
+          EXCLUDE_AREA: ${{ inputs.exclude_area }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APIFY_TOKEN:-}" ] || [ -z "${GOOGLE_MAPS_API_KEY:-}" ]; then
+            echo "::error::Set APIFY_TOKEN and GOOGLE_MAPS_API_KEY as repository secrets (Settings -> Secrets and variables -> Actions)."
+            exit 1
+          fi
+          args=(--destination "$DESTINATION" --max-minutes "$MAX_MINUTES")
+          [ "$NO_TRANSIT" = "true" ] && args+=(--no-transit)
+          [ -n "$MAX_PRICE" ] && args+=(--max-price "$MAX_PRICE")
+          [ -n "$MIN_SIZE" ] && args+=(--min-size "$MIN_SIZE")
+          [ -n "$MAX_CENTRE_KM" ] && args+=(--max-centre-km "$MAX_CENTRE_KM")
+          [ -n "$EXCLUDE_ID" ] && args+=(--exclude-id "$EXCLUDE_ID")
+          [ -n "$EXCLUDE_AREA" ] && args+=(--exclude-area "$EXCLUDE_AREA")
+          python -m prop_search.main "${args[@]}"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: |
+            results.csv
+            results.json
+          if-no-files-found: warn

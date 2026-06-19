@@ -65,6 +65,22 @@ python -m prop_search.main --print-url
 | `--limit` | Cap listings processed (testing) | — |
 | `--out` | Output file prefix | `results` |
 
+## Run from your phone (GitHub Actions)
+
+No computer needed — trigger a run from the GitHub mobile app or browser:
+
+1. **One-time:** in the repo, go to **Settings → Secrets and variables → Actions**
+   and add two repository secrets:
+   - `APIFY_TOKEN`
+   - `GOOGLE_MAPS_API_KEY`
+2. Go to the **Actions** tab → **Property search** → **Run workflow**.
+3. Enter the destination and max minutes (other filters are optional overrides),
+   then **Run workflow**.
+4. Open the finished run and download the **results** artifact
+   (`results.csv` / `results.json`).
+
+The workflow is defined in `.github/workflows/search.yml`.
+
 ## Cost & caching
 
 - Apify: ~$1 per 1,000 listings (free $5 starter credit).
