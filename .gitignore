@@ -1,0 +1,16 @@
+# Secrets
+.env
+
+# Caches & outputs
+.cache/
+results.csv
+results.json
+*.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
