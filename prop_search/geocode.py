@@ -1,25 +1,31 @@
-"""Geocode listing addresses to lat/lng via the Google Geocoding API.
+"""Geocode addresses to lat/lng.
 
-Results are cached on disk keyed by the query string, so repeated runs never
-re-bill the same address.
+Uses the free OpenStreetMap Nominatim service (no API key, no billing). Results
+are cached on disk keyed by the query string. Listings from the scraper already
+carry coordinates, so in practice this is used mainly for the destination.
+
+Nominatim usage policy: send a descriptive User-Agent and keep to <=1 req/sec.
 """
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 import requests
 
 from .cache import JsonCache
 
-GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+USER_AGENT = "prop-search/0.1 (idealista property search tool)"
 DEFAULT_CACHE = ".cache/geocode.json"
 
 
 class Geocoder:
-    def __init__(self, api_key: str, cache_path: str = DEFAULT_CACHE):
-        self.api_key = api_key
+    def __init__(self, cache_path: str = DEFAULT_CACHE, min_interval: float = 1.1):
         self.cache = JsonCache(cache_path)
+        self.min_interval = min_interval
+        self._last_call = 0.0
 
     def geocode(self, query: str) -> Optional[tuple[float, float]]:
         """Return (lat, lng) for an address/area, or None if not found."""
@@ -29,20 +35,27 @@ class Geocoder:
         if cached is not None:
             return tuple(cached) if cached else None  # [] means "known miss"
 
-        params = {"address": query, "key": self.api_key, "region": "es"}
-        resp = requests.get(GEOCODE_URL, params=params, timeout=30)
+        self._throttle()
+        params = {"q": query, "format": "json", "limit": 1, "countrycodes": "es"}
+        resp = requests.get(
+            NOMINATIM_URL, params=params, headers={"User-Agent": USER_AGENT}, timeout=30
+        )
         resp.raise_for_status()
-        data = resp.json()
+        results = resp.json()
 
-        results = data.get("results") or []
         if not results:
             self.cache.set(query, [])  # remember the miss
             return None
 
-        loc = results[0]["geometry"]["location"]
-        coords = (loc["lat"], loc["lng"])
+        coords = (float(results[0]["lat"]), float(results[0]["lon"]))
         self.cache.set(query, list(coords))
         return coords
+
+    def _throttle(self) -> None:
+        elapsed = time.monotonic() - self._last_call
+        if elapsed < self.min_interval:
+            time.sleep(self.min_interval - elapsed)
+        self._last_call = time.monotonic()
 
 
 def _listing_query(listing: dict) -> str:

@@ -80,11 +80,13 @@ class SearchConfig:
             raise ValueError(
                 "APIFY_TOKEN is not set. Add it to your .env (see .env.example)."
             )
-        if not self.google_api_key:
-            raise ValueError(
-                "GOOGLE_MAPS_API_KEY is not set. Add it to your .env (see .env.example)."
-            )
         if not self.skip_transit:
+            # Geocoding uses free Nominatim; only the transit step needs Google.
+            if not self.google_api_key:
+                raise ValueError(
+                    "GOOGLE_MAPS_API_KEY is not set. Add it to your .env "
+                    "(see .env.example), or pass --no-transit."
+                )
             if not self.destination:
                 raise ValueError(
                     "A --destination is required for the transit filter "

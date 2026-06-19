@@ -104,7 +104,7 @@ def run(config: SearchConfig) -> list[dict]:
         print(f"  {len(listings)} after excluding basement/semi-basement "
               f"({before - len(listings)} dropped).")
 
-    geocoder = Geocoder(config.google_api_key)
+    geocoder = Geocoder()
     listings = geocode_listings(listings, geocoder)
 
     listings = filter_by_centre(
