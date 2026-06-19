@@ -94,6 +94,7 @@ def normalize_listing(item: dict) -> dict:
     lat, lng = _extract_coords(item)
 
     return {
+        "id": _first(item, "propertyCode", "id", "adid"),
         "title": _first(item, "title", "name"),
         "price": parse_price(_first(item, "price", "priceInfo", "amount")),
         "size_m2": parse_size(_first(item, "size", "surface")) or parse_size(details),

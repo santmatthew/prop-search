@@ -11,6 +11,7 @@ import argparse
 import sys
 
 from .config import SearchConfig
+from .exclude import apply_exclusions
 from .floors import filter_out_basement
 from .geo import filter_by_centre
 from .geocode import Geocoder, geocode_listings
@@ -31,6 +32,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-bedrooms", type=int, help="minimum number of bedrooms")
     p.add_argument("--include-basement", action="store_true",
                    help="keep basement / semi-basement listings (off by default)")
+    p.add_argument("--exclude-id", action="append", metavar="PROPERTY_CODE",
+                   help="idealista property code to exclude (repeatable)")
+    p.add_argument("--exclude-area", action="append", metavar="AREA",
+                   help="neighborhood/area substring to exclude (repeatable)")
     # Geo filters
     p.add_argument("--centre-lat", type=float, help="centre latitude")
     p.add_argument("--centre-lng", type=float, help="centre longitude")
@@ -72,6 +77,12 @@ def config_from_args(args: argparse.Namespace) -> SearchConfig:
     for key, value in overrides.items():
         if value is not None:
             setattr(config, key, value)
+
+    # Exclusions from the CLI are additive to the configured defaults.
+    if args.exclude_id:
+        config.exclude_ids = list(config.exclude_ids) + args.exclude_id
+    if args.exclude_area:
+        config.exclude_areas = list(config.exclude_areas) + args.exclude_area
     return config
 
 
@@ -103,6 +114,13 @@ def run(config: SearchConfig) -> list[dict]:
         listings = filter_out_basement(listings)
         print(f"  {len(listings)} after excluding basement/semi-basement "
               f"({before - len(listings)} dropped).")
+
+    if config.exclude_ids or config.exclude_areas:
+        before = len(listings)
+        listings = apply_exclusions(listings, config.exclude_ids, config.exclude_areas)
+        print(f"  {len(listings)} after manual exclusions "
+              f"({before - len(listings)} dropped: "
+              f"ids={config.exclude_ids}, areas={config.exclude_areas}).")
 
     geocoder = Geocoder()
     listings = geocode_listings(listings, geocoder)

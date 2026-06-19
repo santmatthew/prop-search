@@ -36,10 +36,17 @@ class SearchConfig:
     location: str = "madrid-madrid"  # idealista location slug
     operation: str = "venta-viviendas"  # sale of homes
     min_price: int = 250_000
-    max_price: int = 360_000
-    min_size: int = 80  # m2
+    max_price: int = 380_000
+    min_size: int = 70  # m2
     min_bedrooms: int = 2
     exclude_basement: bool = True  # drop basement (-1) and semi-basement floors
+
+    # Manual exclusions. IDs are idealista property codes; areas are matched
+    # (accent-insensitive substring) against the listing location.
+    exclude_ids: list[str] = field(
+        default_factory=lambda: ["110706020"]  # Palacio "penthouse" flagged as a scam
+    )
+    exclude_areas: list[str] = field(default_factory=lambda: ["lavapies"])
 
     # --- Geo filters (applied client-side after geocoding) ---
     centre_lat: float = MADRID_CENTRE_LAT
@@ -54,7 +61,7 @@ class SearchConfig:
     # idealista sorts by relevance, not distance, so to honour the centre-radius
     # filter we fetch the whole result set and filter client-side. The actor
     # caps at however many actually match (~$0.0009/result on the free plan).
-    max_listings: int = 400
+    max_listings: int = 1000
     limit: Optional[int] = None  # cap listings processed (testing)
     skip_transit: bool = False
     out_prefix: str = "results"

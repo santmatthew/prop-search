@@ -1,6 +1,7 @@
 """Offline unit tests — no network or API keys required."""
 
 from prop_search.config import SearchConfig
+from prop_search.exclude import apply_exclusions, listing_id
 from prop_search.floors import filter_out_basement, is_basement
 from prop_search.geo import filter_by_centre, haversine_km
 from prop_search.idealista_url import build_search_url
@@ -13,8 +14,8 @@ def test_build_search_url_default_filters():
     url = build_search_url(SearchConfig())
     assert url == (
         "https://www.idealista.com/venta-viviendas/madrid-madrid/"
-        "con-precio-hasta_360000,precio-desde_250000,"
-        "metros-cuadrados-mas-de_80,de-dos-dormitorios/"
+        "con-precio-hasta_380000,precio-desde_250000,"
+        "metros-cuadrados-mas-de_70,de-dos-dormitorios/"
     )
 
 
@@ -72,6 +73,22 @@ def test_filter_out_basement():
     ]
     kept = filter_out_basement(listings)
     assert [k["title"] for k in kept] == ["Piso luminoso", "Bajo con jardín"]
+
+
+def test_listing_id_from_field_and_url():
+    assert listing_id({"id": "123"}) == "123"
+    assert listing_id({"url": "https://www.idealista.com/inmueble/110706020/"}) == "110706020"
+    assert listing_id({}) is None
+
+
+def test_apply_exclusions_by_id_and_area():
+    listings = [
+        {"id": "110706020", "location": "Penthouse in Palacio, Centro, Madrid"},
+        {"id": "111413194", "location": "Calle del Olivar, Lavapiés-Embajadores, Centro"},
+        {"id": "999", "location": "Calle de Galileo, Arapiles, Chamberí, Madrid"},
+    ]
+    kept = apply_exclusions(listings, exclude_ids=["110706020"], exclude_areas=["lavapies"])
+    assert [k["id"] for k in kept] == ["999"]
 
 
 def test_haversine_known_distance():
