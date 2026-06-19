@@ -38,6 +38,8 @@ def build_search_url(config: SearchConfig) -> str:
 
     if config.max_price:
         filters.append(f"con-precio-hasta_{config.max_price}")
+    if getattr(config, "min_price", None):
+        filters.append(f"precio-desde_{config.min_price}")
     if config.min_size:
         filters.append(f"metros-cuadrados-mas-de_{config.min_size}")
 

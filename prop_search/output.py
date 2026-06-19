@@ -11,6 +11,7 @@ FIELDS = [
     "price",
     "size_m2",
     "rooms",
+    "floor",
     "location",
     "centre_km",
     "transit_minutes",

@@ -84,6 +84,8 @@ def normalize_listing(item: dict) -> dict:
         "price": parse_price(_first(item, "price", "priceInfo", "amount")),
         "size_m2": parse_size(_first(item, "size", "surface")) or parse_size(details),
         "rooms": parse_rooms(_first(item, "rooms", "bedrooms")) or parse_rooms(details),
+        "floor": _first(item, "floor"),
+        "details": details,
         "location": location,
         "url": _first(item, "url", "link"),
         "lat": lat,
@@ -100,10 +102,26 @@ def _run_actor(config: SearchConfig, search_url: str) -> Iterable[dict]:
     client = ApifyClient(config.apify_token)
     run_input = {
         "searchUrls": [search_url],
+        "startUrls": [{"url": search_url}],
         "maxListings": config.max_listings,
+        "maxItems": config.max_listings,
+        # idealista geoblocks non-Spanish IPs and uses DataDome, so force
+        # Spanish residential proxies. Actors that ignore this key are unharmed.
+        "proxyConfiguration": {
+            "useApifyProxy": True,
+            "apifyProxyGroups": ["RESIDENTIAL"],
+            "apifyProxyCountry": config.proxy_country,
+        },
     }
     run = client.actor(config.apify_actor).call(run_input=run_input)
-    dataset_id = run["defaultDatasetId"]
+    # apify-client >=3 returns a pydantic Run (attr); older returns a dict.
+    dataset_id = (
+        run.get("defaultDatasetId")
+        if isinstance(run, dict)
+        else getattr(run, "default_dataset_id", None)
+    )
+    if not dataset_id:
+        raise RuntimeError("Apify run returned no dataset id")
     return client.dataset(dataset_id).iterate_items()
 
 

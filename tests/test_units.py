@@ -1,6 +1,7 @@
 """Offline unit tests — no network or API keys required."""
 
 from prop_search.config import SearchConfig
+from prop_search.floors import filter_out_basement, is_basement
 from prop_search.geo import filter_by_centre, haversine_km
 from prop_search.idealista_url import build_search_url
 from prop_search.scraper import normalize_listing, parse_price, parse_rooms, parse_size
@@ -12,7 +13,8 @@ def test_build_search_url_default_filters():
     url = build_search_url(SearchConfig())
     assert url == (
         "https://www.idealista.com/venta-viviendas/madrid-madrid/"
-        "con-precio-hasta_360000,metros-cuadrados-mas-de_80,de-dos-dormitorios/"
+        "con-precio-hasta_360000,precio-desde_250000,"
+        "metros-cuadrados-mas-de_80,de-dos-dormitorios/"
     )
 
 
@@ -50,6 +52,26 @@ def test_normalize_listing_maps_fields():
     assert out["size_m2"] == 85
     assert out["rooms"] == 2
     assert out["lat"] == 40.42 and out["lng"] == -3.69
+
+
+def test_is_basement_spanish_and_english():
+    assert is_basement("Sótano interior")
+    assert is_basement("Semisótano exterior")
+    assert is_basement("semi-sotano")
+    assert is_basement("Cozy basement flat")
+    assert not is_basement("Bajo exterior con patio")  # ground floor kept
+    assert not is_basement("Planta 3ª exterior")
+    assert not is_basement(None)
+
+
+def test_filter_out_basement():
+    listings = [
+        {"title": "Piso luminoso", "details": "90 m² · 3 hab · Planta 2ª"},
+        {"title": "Estudio", "details": "85 m² · 2 hab · Sótano"},
+        {"title": "Bajo con jardín", "floor": "Bajo"},
+    ]
+    kept = filter_out_basement(listings)
+    assert [k["title"] for k in kept] == ["Piso luminoso", "Bajo con jardín"]
 
 
 def test_haversine_known_distance():

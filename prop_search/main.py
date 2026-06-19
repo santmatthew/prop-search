@@ -11,6 +11,7 @@ import argparse
 import sys
 
 from .config import SearchConfig
+from .floors import filter_out_basement
 from .geo import filter_by_centre
 from .geocode import Geocoder, geocode_listings
 from .idealista_url import build_search_url
@@ -24,9 +25,12 @@ def build_parser() -> argparse.ArgumentParser:
     # Base filters
     p.add_argument("--location", help="idealista location slug (default madrid-madrid)")
     p.add_argument("--operation", help="idealista operation slug (default venta-viviendas)")
+    p.add_argument("--min-price", type=int, help="minimum price in euros")
     p.add_argument("--max-price", type=int, help="maximum price in euros")
     p.add_argument("--min-size", type=int, help="minimum size in m2")
     p.add_argument("--min-bedrooms", type=int, help="minimum number of bedrooms")
+    p.add_argument("--include-basement", action="store_true",
+                   help="keep basement / semi-basement listings (off by default)")
     # Geo filters
     p.add_argument("--centre-lat", type=float, help="centre latitude")
     p.add_argument("--centre-lng", type=float, help="centre longitude")
@@ -50,7 +54,9 @@ def config_from_args(args: argparse.Namespace) -> SearchConfig:
     overrides = {
         "location": args.location,
         "operation": args.operation,
+        "min_price": args.min_price,
         "max_price": args.max_price,
+        "exclude_basement": False if args.include_basement else None,
         "min_size": args.min_size,
         "min_bedrooms": args.min_bedrooms,
         "centre_lat": args.centre_lat,
@@ -91,6 +97,12 @@ def run(config: SearchConfig) -> list[dict]:
     print("Scraping idealista via Apify...")
     listings = scrape(config)
     print(f"  {len(listings)} listing(s) returned.")
+
+    if config.exclude_basement:
+        before = len(listings)
+        listings = filter_out_basement(listings)
+        print(f"  {len(listings)} after excluding basement/semi-basement "
+              f"({before - len(listings)} dropped).")
 
     geocoder = Geocoder(config.google_api_key)
     listings = geocode_listings(listings, geocoder)

@@ -34,9 +34,11 @@ class SearchConfig:
     # --- Base idealista filters (applied via the search URL) ---
     location: str = "madrid-madrid"  # idealista location slug
     operation: str = "venta-viviendas"  # sale of homes
+    min_price: int = 250_000
     max_price: int = 360_000
     min_size: int = 80  # m2
     min_bedrooms: int = 2
+    exclude_basement: bool = True  # drop basement (-1) and semi-basement floors
 
     # --- Geo filters (applied client-side after geocoding) ---
     centre_lat: float = MADRID_CENTRE_LAT
@@ -57,6 +59,7 @@ class SearchConfig:
     apify_token: Optional[str] = field(default=None, repr=False)
     google_api_key: Optional[str] = field(default=None, repr=False)
     apify_actor: str = DEFAULT_APIFY_ACTOR
+    proxy_country: str = "ES"  # idealista geoblocks non-Spanish IPs
 
     @classmethod
     def from_env(cls) -> "SearchConfig":
