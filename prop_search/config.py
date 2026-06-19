@@ -44,7 +44,7 @@ class SearchConfig:
     # --- Geo filters (applied client-side after geocoding) ---
     centre_lat: float = MADRID_CENTRE_LAT
     centre_lng: float = MADRID_CENTRE_LNG
-    max_centre_km: float = 2.5
+    max_centre_km: float = 6.0
 
     # --- Transit filter (Google Routes API) ---
     destination: Optional[str] = None  # address or "lat,lng"; required for transit step

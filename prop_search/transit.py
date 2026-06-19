@@ -7,6 +7,7 @@ destination and read back the duration. Results are cached on disk keyed by
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
@@ -17,10 +18,34 @@ ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 DEFAULT_CACHE = ".cache/transit.json"
 
 
+def next_weekday_morning(hour: int = 9, minute: int = 0) -> datetime:
+    """Next upcoming weekday (Mon-Fri) at HH:MM in Europe/Madrid time.
+
+    Transit schedules are time-of-day dependent, so commute estimates use a
+    realistic time rather than 'now'. Used here as the arrival deadline (be at
+    work by 9 AM). June is CEST (UTC+2); we use a fixed +02:00 offset.
+    """
+    madrid = timezone(timedelta(hours=2))
+    now = datetime.now(madrid)
+    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if candidate <= now:
+        candidate += timedelta(days=1)
+    while candidate.weekday() >= 5:  # Sat=5, Sun=6
+        candidate += timedelta(days=1)
+    return candidate
+
+
 class TransitTimer:
-    def __init__(self, api_key: str, cache_path: str = DEFAULT_CACHE):
+    def __init__(
+        self,
+        api_key: str,
+        cache_path: str = DEFAULT_CACHE,
+        arrival_time: Optional[datetime] = None,
+    ):
         self.api_key = api_key
         self.cache = JsonCache(cache_path)
+        # Be at the destination by this time (weekday 09:00 Madrid by default).
+        self.arrival_time = arrival_time or next_weekday_morning()
 
     def minutes(
         self,
@@ -30,7 +55,12 @@ class TransitTimer:
         dest_lng: float,
     ) -> Optional[float]:
         """Transit duration in minutes from origin to destination, or None."""
-        key = f"{origin_lat:.5f},{origin_lng:.5f}|{dest_lat:.5f},{dest_lng:.5f}"
+        arr = self.arrival_time.astimezone(timezone.utc)
+        arr_iso = arr.strftime("%Y-%m-%dT%H:%M:%SZ")
+        key = (
+            f"{origin_lat:.5f},{origin_lng:.5f}|"
+            f"{dest_lat:.5f},{dest_lng:.5f}|arr{arr_iso}"
+        )
         cached = self.cache.get(key)
         if cached is not None:
             return cached if cached >= 0 else None  # -1 means "known no route"
@@ -39,6 +69,7 @@ class TransitTimer:
             "origin": _waypoint(origin_lat, origin_lng),
             "destination": _waypoint(dest_lat, dest_lng),
             "travelMode": "TRANSIT",
+            "arrivalTime": arr_iso,
         }
         headers = {
             "Content-Type": "application/json",
