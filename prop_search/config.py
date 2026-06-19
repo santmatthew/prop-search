@@ -23,8 +23,9 @@ except ImportError:  # python-dotenv is optional at import time
 MADRID_CENTRE_LAT = 40.4168
 MADRID_CENTRE_LNG = -3.7038
 
-# Default Apify actor that accepts idealista search URLs.
-DEFAULT_APIFY_ACTOR = "makework36/idealista-scraper"
+# Default Apify actor: handles DataDome internally (auto residential proxy on
+# free plans), no extra keys, returns coordinates. Accepts idealista URLs.
+DEFAULT_APIFY_ACTOR = "dz_omar/idealista-scraper-api"
 
 
 @dataclass
@@ -50,7 +51,10 @@ class SearchConfig:
     max_transit_minutes: Optional[int] = None
 
     # --- Run controls ---
-    max_listings: int = 200
+    # idealista sorts by relevance, not distance, so to honour the centre-radius
+    # filter we fetch the whole result set and filter client-side. The actor
+    # caps at however many actually match (~$0.0009/result on the free plan).
+    max_listings: int = 400
     limit: Optional[int] = None  # cap listings processed (testing)
     skip_transit: bool = False
     out_prefix: str = "results"

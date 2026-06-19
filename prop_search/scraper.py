@@ -73,9 +73,23 @@ def _extract_coords(item: dict) -> tuple[Optional[float], Optional[float]]:
 def normalize_listing(item: dict) -> dict:
     """Map a raw actor record into a stable internal shape."""
     details = _first(item, "details", "subtitle", "description") or ""
+
     location = item.get("location")
     if isinstance(location, dict):
         location = location.get("name") or location.get("address")
+    if not location:
+        # dz_omar/idealista-scraper-api: build from address parts.
+        parts = [
+            item.get("address"),
+            item.get("neighborhood"),
+            item.get("district"),
+            item.get("municipality"),
+        ]
+        seen: list[str] = []
+        for part in parts:
+            if part and part not in seen:
+                seen.append(str(part))
+        location = ", ".join(seen) or None
 
     lat, lng = _extract_coords(item)
 
@@ -95,24 +109,38 @@ def normalize_listing(item: dict) -> dict:
 
 # --- Actor invocation ------------------------------------------------------
 
-def _run_actor(config: SearchConfig, search_url: str) -> Iterable[dict]:
-    """Run the Apify actor and yield raw dataset items."""
-    from apify_client import ApifyClient
+def _build_run_input(config: SearchConfig, search_url: str) -> dict:
+    """Construct actor-specific input. Actors validate their schema strictly,
+    so we tailor the payload to the configured actor."""
+    actor = config.apify_actor
 
-    client = ApifyClient(config.apify_token)
-    run_input = {
+    if "idealista-scraper-api" in actor:  # dz_omar/idealista-scraper-api
+        # Handles anti-bot + proxy internally; min 10 results.
+        return {
+            "Property_urls": [{"url": search_url}],
+            "desiredResults": max(config.max_listings, 10),
+        }
+
+    # Generic fallback for URL-based actors that accept a proxy override.
+    return {
         "searchUrls": [search_url],
         "startUrls": [{"url": search_url}],
         "maxListings": config.max_listings,
         "maxItems": config.max_listings,
-        # idealista geoblocks non-Spanish IPs and uses DataDome, so force
-        # Spanish residential proxies. Actors that ignore this key are unharmed.
         "proxyConfiguration": {
             "useApifyProxy": True,
             "apifyProxyGroups": ["RESIDENTIAL"],
             "apifyProxyCountry": config.proxy_country,
         },
     }
+
+
+def _run_actor(config: SearchConfig, search_url: str) -> Iterable[dict]:
+    """Run the Apify actor and yield raw dataset items."""
+    from apify_client import ApifyClient
+
+    client = ApifyClient(config.apify_token)
+    run_input = _build_run_input(config, search_url)
     run = client.actor(config.apify_actor).call(run_input=run_input)
     # apify-client >=3 returns a pydantic Run (attr); older returns a dict.
     dataset_id = (

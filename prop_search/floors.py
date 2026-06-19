@@ -1,33 +1,50 @@
 """Detect and filter out basement / semi-basement listings.
 
-idealista is a Spanish site, so floor descriptions appear in Spanish (e.g.
-"Bajo", "Sótano", "Semisótano", "Planta 3ª"). We drop only below-ground floors
-(basement = -1 = "sótano", and "semisótano"); ground floor ("bajo") is kept.
+idealista exposes a floor value that may be a human label (Spanish: "Sótano",
+"Semisótano", "Bajo", "Planta 3ª") or a short code in its API:
+    st = sótano (basement, -1)   ss = semisótano (semi-basement)
+    bj = bajo (ground floor)     en = entreplanta (mezzanine)
+We drop only below-ground floors (sótano / semisótano); ground floor is kept.
 """
 
 from __future__ import annotations
 
 import re
 
-# Match sotano / semisotano with or without accents and separators.
-_BASEMENT_RE = re.compile(r"semi[\s-]*s[oó]tano|s[oó]tano|\bbasement\b", re.IGNORECASE)
+# Floor *codes* that mean (semi-)basement — matched exactly, case-insensitive.
+_BASEMENT_CODES = {"st", "ss"}
+
+# Free-text mentions of (semi-)basement, accents optional.
+_BASEMENT_TEXT_RE = re.compile(r"semi[\s-]*s[oó]tano|s[oó]tano|\bbasement\b", re.IGNORECASE)
+
+
+def is_basement_floor(floor: object) -> bool:
+    """True if a floor value (code or label) denotes a (semi-)basement."""
+    if floor is None:
+        return False
+    text = str(floor).strip().lower()
+    if text in _BASEMENT_CODES:
+        return True
+    return bool(_BASEMENT_TEXT_RE.search(text))
 
 
 def is_basement(text: object) -> bool:
-    """True if the text describes a basement or semi-basement floor."""
+    """True if free text describes a basement or semi-basement floor."""
     if not text:
         return False
-    return bool(_BASEMENT_RE.search(str(text)))
+    return bool(_BASEMENT_TEXT_RE.search(str(text)))
 
 
 def filter_out_basement(listings: list[dict]) -> list[dict]:
-    """Drop listings whose title/details/floor indicate a (semi-)basement."""
+    """Drop listings whose floor/title/details indicate a (semi-)basement."""
     kept: list[dict] = []
     for item in listings:
+        if is_basement_floor(item.get("floor")):
+            continue
         blob = " ".join(
-            str(item.get(k) or "")
-            for k in ("floor", "title", "details", "description")
+            str(item.get(k) or "") for k in ("title", "details", "description")
         )
-        if not is_basement(blob):
-            kept.append(item)
+        if is_basement(blob):
+            continue
+        kept.append(item)
     return kept
