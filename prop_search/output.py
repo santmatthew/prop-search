@@ -101,7 +101,7 @@ def render_html(listings: list[dict], title: str = "Madrid property search") -> 
   td.price {{ font-weight: 600; white-space: nowrap; }}
   a {{ color: #0a64c2; text-decoration: none; white-space: nowrap; }}
   tr.data td {{ border-bottom: none; }}
-  tr.loc td {{ color: #555; font-size: .85rem; padding-top: 0; padding-bottom: 12px; }}
+  tr.loc td {{ color: #777; font-size: .72rem; padding-top: 0; padding-bottom: 12px; }}
 </style>
 </head>
 <body>
