@@ -1,8 +1,11 @@
 name: Property search
 
 # Run from your phone: GitHub -> Actions tab -> "Property search" -> Run workflow.
-# Fill in the destination and max minutes, run it, then download the
-# "results" artifact (results.csv / results.json) from the finished run.
+# After it finishes the report is published to GitHub Pages (a stable public URL,
+# e.g. https://<user>.github.io/prop-search/) and also attached as an artifact.
+#
+# One-time setup: repo Settings -> Pages -> "Build and deployment" -> Source =
+# "GitHub Actions"; and add APIFY_TOKEN + GOOGLE_MAPS_API_KEY repo secrets.
 
 on:
   workflow_dispatch:
@@ -38,6 +41,16 @@ on:
       exclude_area:
         description: "Extra neighborhood/area to exclude"
         required: false
+
+# Needed for the GitHub Pages deploy.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   search:
@@ -81,7 +94,14 @@ jobs:
           [ -n "$EXCLUDE_AREA" ] && args+=(--exclude-area "$EXCLUDE_AREA")
           python -m prop_search.main "${args[@]}"
 
-      - name: Upload results
+      - name: Assemble Pages site
+        run: |
+          mkdir -p public
+          cp results.html public/index.html
+          cp results.csv public/ 2>/dev/null || true
+          cp results.json public/ 2>/dev/null || true
+
+      - name: Upload results artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -91,3 +111,19 @@ jobs:
             results.json
             results.html
           if-no-files-found: warn
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: search
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

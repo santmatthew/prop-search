@@ -156,6 +156,7 @@ def render_html(listings: list, title: str = "Madrid property search",
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>{html.escape(title)}</title>
 <style>
   :root {{ --line:#e5e5e5; }}

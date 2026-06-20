@@ -83,16 +83,20 @@ python -m prop_search.main --print-url
 
 No computer needed — trigger a run from the GitHub mobile app or browser:
 
-1. **One-time:** in the repo, go to **Settings → Secrets and variables → Actions**
-   and add two repository secrets:
-   - `APIFY_TOKEN`
-   - `GOOGLE_MAPS_API_KEY`
+1. **One-time:**
+   - **Settings → Secrets and variables → Actions** → add `APIFY_TOKEN` and
+     `GOOGLE_MAPS_API_KEY`.
+   - **Settings → Pages → Build and deployment → Source = "GitHub Actions"**
+     (enables the public report URL).
 2. Go to the **Actions** tab → **Property search** → **Run workflow**.
 3. Enter the destination and max minutes (other filters are optional overrides),
    then **Run workflow**.
-4. Open the finished run and download the **results** artifact
-   (`results.csv` / `results.json`).
+4. When it finishes, the report is published to a stable **public URL**:
+   `https://<your-username>.github.io/prop-search/` (the `deploy` job's summary
+   links it). It opens in any browser. The full files are also attached to the
+   run as the **results** artifact.
 
+The report page is public (it carries a `noindex` tag so search engines skip it).
 The workflow is defined in `.github/workflows/search.yml`.
 
 ## Cost & caching
