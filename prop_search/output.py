@@ -68,15 +68,17 @@ def render_html(listings: list[dict], title: str = "Madrid property search") -> 
             if url else "&mdash;"
         )
         rows.append(
-            "<tr>"
+            "<tr class='data'>"
             f"<td class='num'>{i}</td>"
             f"<td class='price'>{price_str}</td>"
             f"<td class='num'>{_fmt(item.get('size_m2'))}</td>"
             f"<td class='num'>{_fmt(item.get('rooms'))}</td>"
             f"<td class='num'>{_fmt(item.get('transit_minutes'))}</td>"
             f"<td class='num'>{_fmt(item.get('centre_km'))}</td>"
-            f"<td>{loc}</td>"
             f"<td>{link}</td>"
+            "</tr>"
+            "<tr class='loc'>"
+            f"<td colspan='7'>{loc or '&mdash;'}</td>"
             "</tr>"
         )
 
@@ -98,7 +100,8 @@ def render_html(listings: list[dict], title: str = "Madrid property search") -> 
   td.num, th.num {{ text-align: right; white-space: nowrap; }}
   td.price {{ font-weight: 600; white-space: nowrap; }}
   a {{ color: #0a64c2; text-decoration: none; white-space: nowrap; }}
-  tr:hover td {{ background: #fafafe; }}
+  tr.data td {{ border-bottom: none; }}
+  tr.loc td {{ color: #555; font-size: .85rem; padding-top: 0; padding-bottom: 12px; }}
 </style>
 </head>
 <body>
@@ -107,7 +110,7 @@ def render_html(listings: list[dict], title: str = "Madrid property search") -> 
 <table>
 <thead><tr>
   <th class="num">#</th><th>Price</th><th class="num">m²</th><th class="num">bed</th>
-  <th class="num">min</th><th class="num">km</th><th>Location</th><th>Link</th>
+  <th class="num">min</th><th class="num">km</th><th>Link</th>
 </tr></thead>
 <tbody>
 {chr(10).join(rows)}
