@@ -53,7 +53,12 @@ def _location(item: dict) -> Optional[str]:
 
 
 def _to_listing(item: dict) -> Listing:
-    details = first(item, "details", "subtitle", "description") or ""
+    # Combine the title and description so condition detection (e.g. "nuda
+    # propiedad") sees all available text.
+    suggested = item.get("suggestedTexts")
+    title = suggested.get("title") if isinstance(suggested, dict) else None
+    body = first(item, "details", "subtitle", "description") or ""
+    details = " ".join(p for p in (title, body) if p)
     lat, lng = _coords(item)
     return Listing(
         source="idealista",

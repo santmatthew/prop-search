@@ -20,6 +20,20 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = "prop-search/0.1 (idealista property search tool)"
 DEFAULT_CACHE = ".cache/geocode.json"
 
+# Reject results no more precise than a whole town/city/region. A vague address
+# (e.g. "Madrid") otherwise resolves to the city centroid, which silently looks
+# like 0 km from centre and gives a bogus transit origin. We keep street/house/
+# neighbourhood-level results and treat coarser ones as a miss.
+COARSE_TYPES = {
+    "city", "town", "village", "municipality", "county", "state_district",
+    "state", "region", "province", "country", "continent", "administrative",
+}
+
+
+def _too_coarse(result: dict) -> bool:
+    atype = result.get("addresstype") or result.get("type")
+    return atype in COARSE_TYPES
+
 
 class Geocoder:
     def __init__(self, cache_path: str = DEFAULT_CACHE, min_interval: float = 1.1):
@@ -36,15 +50,16 @@ class Geocoder:
             return tuple(cached) if cached else None  # [] means "known miss"
 
         self._throttle()
-        params = {"q": query, "format": "json", "limit": 1, "countrycodes": "es"}
+        params = {"q": query, "format": "json", "limit": 1,
+                  "countrycodes": "es", "addressdetails": 1}
         resp = requests.get(
             NOMINATIM_URL, params=params, headers={"User-Agent": USER_AGENT}, timeout=30
         )
         resp.raise_for_status()
         results = resp.json()
 
-        if not results:
-            self.cache.set(query, [])  # remember the miss
+        if not results or _too_coarse(results[0]):
+            self.cache.set(query, [])  # remember the miss (incl. city-level fallback)
             return None
 
         coords = (float(results[0]["lat"]), float(results[0]["lon"]))

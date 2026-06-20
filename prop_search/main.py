@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from .conditions import filter_out_conditions
 from .config import SearchConfig
 from .dedup import dedup
 from .exclude import apply_exclusions
@@ -130,6 +131,14 @@ def run(config: SearchConfig) -> list:
 
     listings = _fetch_all(config)
     print(f"{len(listings)} total listing(s) across sources.")
+
+    # Earliest filter: drop undesirable sale/occupancy conditions (bare
+    # ownership, sold-with-tenants, squatter-occupied) detected in the text.
+    before = len(listings)
+    listings, cond_counts = filter_out_conditions(listings)
+    if before != len(listings):
+        print(f"  {len(listings)} after excluding conditions "
+              f"({before - len(listings)} dropped: {cond_counts}).")
 
     if config.exclude_basement:
         before = len(listings)

@@ -70,6 +70,32 @@ class RedpisoSource(Source):
         return listings
 
 
+def _location(item: dict) -> str | None:
+    """Build a precise, geocodable address from redpiso's structured location.
+
+    ``display_location`` is often too vague (e.g. just "Madrid"), which geocodes
+    to the city centroid. The structured ``location`` object carries the street,
+    quarter and district, which pin the address to the right place.
+    """
+    loc = item.get("location") or {}
+    parts: list[str] = []
+
+    street = loc.get("street") or {}
+    if street.get("name"):
+        road = ((street.get("road_type") or {}).get("name") or "").strip()
+        line = f"{road} {street['name']}".strip()
+        if loc.get("number"):
+            line += f", {loc['number']}"
+        parts.append(line)
+
+    for key in ("quarter", "district", "place"):
+        name = (loc.get(key) or {}).get("name")
+        if name and name not in parts:
+            parts.append(name)
+
+    return ", ".join(parts) or item.get("display_location")
+
+
 def _to_listing(item: dict) -> Listing:
     cadastre = item.get("cadastre_property_summary") or {}
     slug = item.get("slug")
@@ -81,9 +107,10 @@ def _to_listing(item: dict) -> Listing:
         size_m2=cadastre.get("meters") or cadastre.get("usable_meters"),
         rooms=cadastre.get("bedrooms"),
         floor=None,  # not in list API; basement detected from description text
-        location=item.get("display_location"),
+        location=_location(item),
         url=url,
         lat=None,
         lng=None,
-        details=str(item.get("short_description") or ""),
+        details=" ".join(str(item.get(k) or "")
+                         for k in ("final_emblem", "short_description")).strip(),
     )
