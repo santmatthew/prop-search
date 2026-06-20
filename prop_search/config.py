@@ -56,6 +56,9 @@ class SearchConfig:
         default_factory=lambda: ["110706020"]  # Palacio "penthouse" flagged as a scam
     )
     exclude_areas: list[str] = field(default_factory=lambda: ["lavapies"])
+    # Description phrases (word-boundary) for mis-listed properties whose
+    # structured data claims Madrid but whose text reveals another town.
+    exclude_phrases: list[str] = field(default_factory=lambda: ["turre"])
 
     # --- Geo filters (applied client-side after geocoding) ---
     centre_lat: float = MADRID_CENTRE_LAT

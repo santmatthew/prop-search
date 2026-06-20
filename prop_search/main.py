@@ -40,6 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="idealista property code to exclude (repeatable)")
     p.add_argument("--exclude-area", action="append", metavar="AREA",
                    help="neighborhood/area substring to exclude (repeatable)")
+    p.add_argument("--exclude-phrase", action="append", metavar="PHRASE",
+                   help="description phrase to exclude, e.g. a non-Madrid town (repeatable)")
     # Geo filters
     p.add_argument("--centre-lat", type=float, help="centre latitude")
     p.add_argument("--centre-lng", type=float, help="centre longitude")
@@ -90,6 +92,8 @@ def config_from_args(args: argparse.Namespace) -> SearchConfig:
         config.exclude_ids = list(config.exclude_ids) + args.exclude_id
     if args.exclude_area:
         config.exclude_areas = list(config.exclude_areas) + args.exclude_area
+    if args.exclude_phrase:
+        config.exclude_phrases = list(config.exclude_phrases) + args.exclude_phrase
     return config
 
 
@@ -146,12 +150,13 @@ def run(config: SearchConfig) -> list:
         print(f"  {len(listings)} after excluding basement/semi-basement "
               f"({before - len(listings)} dropped).")
 
-    if config.exclude_ids or config.exclude_areas:
+    if config.exclude_ids or config.exclude_areas or config.exclude_phrases:
         before = len(listings)
-        listings = apply_exclusions(listings, config.exclude_ids, config.exclude_areas)
+        listings = apply_exclusions(listings, config.exclude_ids,
+                                    config.exclude_areas, config.exclude_phrases)
         print(f"  {len(listings)} after manual exclusions "
-              f"({before - len(listings)} dropped: "
-              f"ids={config.exclude_ids}, areas={config.exclude_areas}).")
+              f"({before - len(listings)} dropped: ids={config.exclude_ids}, "
+              f"areas={config.exclude_areas}, phrases={config.exclude_phrases}).")
 
     geocoder = Geocoder()
     listings = geocode_listings(listings, geocoder)

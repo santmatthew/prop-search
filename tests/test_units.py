@@ -186,6 +186,20 @@ def test_listing_id_and_exclusions():
     assert [k.id for k in kept] == ["y"]
 
 
+def test_exclude_phrase_in_description():
+    # Mis-listed: structured location says Madrid, description says "en Turre".
+    listings = [
+        L(id="mad", location="Centro, Cortes - Huertas", details="Piso en pleno centro"),
+        L(id="turre", location="Centro, Cortes - Huertas",
+          details="Magnífica casa de 305 metros, en Turre. Ideal para familias."),
+        L(id="ok", location="Calle de Toledo, Centro", details="Junto a la Calle de Toledo"),
+    ]
+    kept = apply_exclusions(listings, exclude_ids=[], exclude_areas=[],
+                            exclude_phrases=["turre"])
+    # 'turre' dropped; 'Calle de Toledo' kept (word-boundary, no false positive)
+    assert [k.id for k in kept] == ["mad", "ok"]
+
+
 def test_haversine_and_centre_filter():
     assert 1.0 < haversine_km(40.4168, -3.7038, 40.4076, -3.6908) < 2.0
     kept = filter_by_centre(
