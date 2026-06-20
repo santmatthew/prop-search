@@ -111,5 +111,6 @@ def _to_listing(item: dict) -> Listing:
         url=url,
         lat=None,
         lng=None,
-        details=str(item.get("short_description") or ""),
+        details=" ".join(str(item.get(k) or "")
+                         for k in ("final_emblem", "short_description")).strip(),
     )

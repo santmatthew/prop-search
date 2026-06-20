@@ -1,5 +1,6 @@
 """Offline unit tests — no network or API keys required."""
 
+from prop_search.conditions import excluded_condition, filter_out_conditions
 from prop_search.config import SearchConfig
 from prop_search.dedup import dedup
 from prop_search.exclude import apply_exclusions, listing_id
@@ -106,6 +107,30 @@ def test_redpiso_builds_precise_address_from_structured_location():
         },
     })
     assert out.location == "Calle de Camarena, 282, Aluche, Latina, Madrid"
+
+
+def test_excluded_condition_detection():
+    assert excluded_condition("Venta de la NUDA PROPIEDAD de un ático") == "nuda_propiedad"
+    assert excluded_condition("Piso alquilado, con inquilinos") == "tenants"
+    assert excluded_condition("Vivienda ocupada ilegalmente") == "squatters"
+    assert excluded_condition("Ocupación ilegal, precio rebajado") == "squatters"
+    # Negations / good listings must NOT match
+    assert excluded_condition("Vivienda en plena propiedad, libre") is None
+    assert excluded_condition("Sin inquilinos, libre de okupas") is None
+    assert excluded_condition("Luminoso piso exterior reformado") is None
+    assert excluded_condition(None) is None
+
+
+def test_filter_out_conditions_all_sources():
+    listings = [
+        L(source="idealista", id="ok", details="Piso reformado y luminoso"),
+        L(source="fotocasa", id="nuda", details="VENTA DE LA NUDA PROPIEDAD"),
+        L(source="redpiso", id="ten", details="Se vende alquilado con inquilinos"),
+        L(source="fotocasa", id="okupa", details="Atención: ocupada ilegalmente"),
+    ]
+    kept, counts = filter_out_conditions(listings)
+    assert [k.id for k in kept] == ["ok"]
+    assert counts == {"nuda_propiedad": 1, "tenants": 1, "squatters": 1}
 
 
 def test_geocoder_rejects_city_level_results():
