@@ -6,6 +6,8 @@ returns coordinates, and accepts idealista search URLs.
 
 from __future__ import annotations
 
+import json
+import os
 from typing import Iterable, Optional
 
 from ..idealista_url import build_search_url
@@ -13,18 +15,46 @@ from ..models import Listing
 from ..parsing import first, parse_price, parse_rooms, parse_size
 from .base import Source
 
+# Raw actor items are cached here so a later run can reuse idealista data when the
+# Apify actor is unavailable (e.g. monthly usage limit hit). fotocasa/redpiso use
+# free APIs and don't need this.
+RAW_CACHE = ".cache/idealista_raw.json"
+
 
 class IdealistaSource(Source):
     name = "idealista"
 
     def fetch(self, config) -> list[Listing]:
         search_url = build_search_url(config)
+        try:
+            raw_items = list(_run_actor(config, search_url))
+            _save_raw(raw_items)
+        except Exception as exc:
+            if os.path.exists(RAW_CACHE):
+                print(f"  (idealista actor unavailable: {exc}; using cached dataset)")
+                raw_items = _load_raw()
+            else:
+                raise
+
         listings: list[Listing] = []
-        for raw in _run_actor(config, search_url):
+        for raw in raw_items:
             listings.append(_to_listing(raw))
             if config.limit and len(listings) >= config.limit:
                 break
         return listings
+
+
+def _save_raw(items: list) -> None:
+    os.makedirs(os.path.dirname(RAW_CACHE), exist_ok=True)
+    tmp = RAW_CACHE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(items, fh, ensure_ascii=False)
+    os.replace(tmp, RAW_CACHE)
+
+
+def _load_raw() -> list:
+    with open(RAW_CACHE, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def _coords(item: dict) -> tuple[Optional[float], Optional[float]]:
