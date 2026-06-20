@@ -183,7 +183,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 
-    csv_path, json_path, html_path = write_results(results, config.out_prefix)
+    controls = {
+        "price_min": config.min_price,
+        "price_max": config.max_price,
+        "price_default": config.slider_price_default,
+        "transit_max": config.max_transit_minutes or 0,
+        "transit_default": config.slider_transit_default,
+        "centre_max": config.max_centre_km,
+        "has_transit": not config.skip_transit,
+    }
+    csv_path, json_path, html_path = write_results(results, config.out_prefix, controls)
     print_summary(results)
     print(f"\nWrote {csv_path}, {json_path} and {html_path}")
     return 0

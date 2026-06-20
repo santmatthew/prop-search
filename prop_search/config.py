@@ -62,6 +62,11 @@ class SearchConfig:
     centre_lng: float = MADRID_CENTRE_LNG
     max_centre_km: float = 6.0
 
+    # Interactive-HTML slider defaults (the report fetches a superset up to the
+    # fetch caps above, but the sliders open at these "normal" thresholds).
+    slider_price_default: int = 380_000
+    slider_transit_default: int = 25
+
     # --- Transit filter (Google Routes API) ---
     destination: Optional[str] = None  # address or "lat,lng"; required for transit step
     max_transit_minutes: Optional[int] = None
