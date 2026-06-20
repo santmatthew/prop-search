@@ -76,6 +76,25 @@ def test_fotocasa_to_listing():
     assert out.lat == 40.41 and out.location == "Calle X, Carabanchel"
 
 
+def test_fotocasa_location_includes_neighborhood_and_excludes_lavapies():
+    # When the street is hidden, ubication is just "Centro"; the neighborhood
+    # ("Embajadores - Lavapiés") must come from upperLevel/level8 so the
+    # lavapies area exclusion can catch it.
+    out = fotocasa_to_listing({
+        "id": 185477979,
+        "transactions": [{"transactionTypeId": 1, "value": [300000]}],
+        "features": [{"key": "surface", "value": [80]}, {"key": "rooms", "value": [2]}],
+        "address": {"ubication": "Centro",
+                    "location": {"upperLevel": "Embajadores - Lavapiés",
+                                 "level8": "Embajadores - Lavapiés"},
+                    "coordinates": {"latitude": 40.41, "longitude": -3.70}},
+        "detail": {"es": "/es/comprar/vivienda/madrid-capital/parking/185477979/d"},
+    })
+    assert "Lavapiés" in out.location
+    kept = apply_exclusions([out], exclude_ids=[], exclude_areas=["lavapies"])
+    assert kept == []
+
+
 def test_redpiso_to_listing():
     out = redpiso_to_listing({
         "code": "RP1",

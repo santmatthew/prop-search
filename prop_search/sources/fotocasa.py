@@ -81,9 +81,27 @@ def _price(item: dict):
     return None
 
 
-def _to_listing(item: dict) -> Listing:
+def _location(item: dict) -> str | None:
+    """Human-readable location including the neighborhood.
+
+    ``ubication`` is often just the district (e.g. "Centro") when the exact
+    street is hidden — the neighborhood ("Embajadores - Lavapiés") lives in
+    ``location.upperLevel`` / ``level8``. Include it so area exclusions and
+    display work; otherwise e.g. a Lavapiés flat reads only as "Centro".
+    """
     addr = item.get("address") or {}
-    coords = addr.get("coordinates") or {}
+    loc = addr.get("location") or {}
+    parts: list[str] = []
+    for value in (addr.get("ubication"), loc.get("upperLevel"), loc.get("level8")):
+        value = (value or "").strip()
+        if value and value not in parts:
+            parts.append(value)
+    return ", ".join(parts) or None
+
+
+def _to_listing(item: dict) -> Listing:
+    item_addr = item.get("address") or {}
+    coords = item_addr.get("coordinates") or {}
     detail = (item.get("detail") or {}).get("es") or ""
     floor = _feature(item, "floor")
     return Listing(
@@ -93,7 +111,7 @@ def _to_listing(item: dict) -> Listing:
         size_m2=parse_size(_feature(item, "surface")),
         rooms=parse_rooms(_feature(item, "rooms")),
         floor=str(floor) if floor is not None else None,
-        location=addr.get("ubication"),
+        location=_location(item),
         url=(SITE + detail) if detail else None,
         lat=coords.get("latitude"),
         lng=coords.get("longitude"),
