@@ -25,6 +25,7 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
     ("nuda_propiedad", re.compile(r"nuda\s*propiedad")),
     ("tenants", re.compile(r"con\s+inquilin")),                 # "alquilada, con inquilinos"
     ("squatters", re.compile(r"ocupad[ao]\s+ilegal|ocupacion\s+ilegal")),
+    ("no_visit", re.compile(r"no\s+se\s+puede\s+visitar")),     # occupied/auction, no viewing
 ]
 
 
