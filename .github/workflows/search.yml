@@ -83,4 +83,5 @@ jobs:
           path: |
             results.csv
             results.json
+            results.html
           if-no-files-found: warn

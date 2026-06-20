@@ -156,9 +156,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 
-    csv_path, json_path = write_results(results, config.out_prefix)
+    csv_path, json_path, html_path = write_results(results, config.out_prefix)
     print_summary(results)
-    print(f"\nWrote {csv_path} and {json_path}")
+    print(f"\nWrote {csv_path}, {json_path} and {html_path}")
     return 0
 
 

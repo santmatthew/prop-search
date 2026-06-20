@@ -143,6 +143,8 @@ def test_write_results(tmp_path):
          "url": "http://x", "lat": 40.4, "lng": -3.7},
     ]
     prefix = str(tmp_path / "out")
-    csv_path, json_path = write_results(listings, prefix)
+    csv_path, json_path, html_path = write_results(listings, prefix)
     assert open(csv_path).read().startswith("title,price,size_m2")
     assert '"transit_minutes": 18' in open(json_path).read()
+    page = open(html_path).read()
+    assert "http://x" in page and "<table" in page
