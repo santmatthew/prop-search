@@ -59,16 +59,19 @@ def test_idealista_to_listing():
 
 def test_fotocasa_to_listing():
     out = fotocasa_to_listing({
-        "id": "f9",
-        "price": {"amount": 320000},
-        "features": {"surface": 80, "rooms": 2},
-        "coordinates": {"latitude": 40.41, "longitude": -3.70},
-        "address": {"neighborhood": "Centro", "municipality": "Madrid"},
-        "detailUrl": "/es/comprar/vivienda/madrid/xyz",
+        "id": 189660685,
+        "transactions": [{"transactionTypeId": 1, "value": [320000]}],
+        "features": [{"key": "surface", "value": [80]},
+                     {"key": "rooms", "value": [2]},
+                     {"key": "floor", "value": [3]}],
+        "address": {"ubication": "Calle X, Carabanchel",
+                    "coordinates": {"latitude": 40.41, "longitude": -3.70}},
+        "detail": {"es": "/es/comprar/vivienda/madrid-capital/abc/189660685/d"},
+        "description": "Piso luminoso",
     })
     assert out.source == "fotocasa" and out.price == 320000 and out.size_m2 == 80
-    assert out.url.startswith("https://www.fotocasa.es/")
-    assert out.lat == 40.41
+    assert out.rooms == 2 and out.url.startswith("https://www.fotocasa.es/")
+    assert out.lat == 40.41 and out.location == "Calle X, Carabanchel"
 
 
 def test_redpiso_to_listing():

@@ -1,109 +1,101 @@
-"""fotocasa.es source via the azzouzana fotocasa-by-search-url Apify actor.
+"""fotocasa.es source via its public gateway API (no auth, no Apify, free).
 
-The actor takes a fotocasa search URL and handles anti-bot internally. NOTE:
-full Madrid sweeps need a paid Apify plan (the free tier caps runs at ~5
-listings); small runs work on the free tier for validation.
+The fotocasa.es web pages are DataDome-protected, but the frontend's own gateway
+``web.gw.fotocasa.es/v2/propertysearch/search`` answers JSON with no auth. We
+call it directly and paginate. Locations are addressed by an opaque
+``combinedLocationIds`` string (Madrid Capital is the default below).
 """
 
 from __future__ import annotations
 
-from typing import Iterable, Optional
+import requests
 
 from ..models import Listing
 from ..parsing import parse_price, parse_rooms, parse_size
 from .base import Source
 
+API_URL = "https://web.gw.fotocasa.es/v2/propertysearch/search"
 SITE = "https://www.fotocasa.es"
+PAGE_SIZE = 30  # the gateway returns 30 per page
+USER_AGENT = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+)
 
 
 class FotocasaSource(Source):
     name = "fotocasa"
 
     def fetch(self, config) -> list[Listing]:
-        search_url = build_search_url(config)
+        params = {
+            "culture": "es-ES",
+            "operationTypeIds": 1,   # buy
+            "propertyTypeIds": 2,    # homes / viviendas
+            "combinedLocationIds": config.fotocasa_combined_location,
+        }
+        if config.min_price:
+            params["minPrice"] = config.min_price
+        if config.max_price:
+            params["maxPrice"] = config.max_price
+        if config.min_size:
+            params["minSurface"] = config.min_size
+        if config.min_bedrooms:
+            params["minRooms"] = config.min_bedrooms
+
+        headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+        session = requests.Session()
+
         listings: list[Listing] = []
-        for raw in _run_actor(config, search_url):
-            listings.append(_to_listing(raw))
-            if config.limit and len(listings) >= config.limit:
+        page = 1
+        while True:
+            params["pageNumber"] = page
+            resp = session.get(API_URL, params=params, headers=headers, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            items = data.get("realEstates") or []
+            if not items:
                 break
+            for raw in items:
+                listings.append(_to_listing(raw))
+                if config.limit and len(listings) >= config.limit:
+                    return listings
+            total = data.get("count") or 0
+            if len(listings) >= total or len(listings) >= config.max_listings:
+                break
+            page += 1
         return listings
 
 
-def build_search_url(config) -> str:
-    params = []
-    if config.min_price:
-        params.append(f"minPrice={config.min_price}")
-    if config.max_price:
-        params.append(f"maxPrice={config.max_price}")
-    if config.min_size:
-        params.append(f"minSurface={config.min_size}")
-    if config.min_bedrooms:
-        params.append(f"minRooms={config.min_bedrooms}")
-    query = ("?" + "&".join(params)) if params else ""
-    return f"{SITE}/es/comprar/viviendas/{config.fotocasa_location}/todas-las-zonas/l{query}"
+def _feature(item: dict, key: str):
+    for f in item.get("features", []):
+        if f.get("key") == key:
+            value = f.get("value")
+            return value[0] if isinstance(value, list) and value else value
+    return None
 
 
-def _get(item: dict, *path, default=None):
-    """Nested lookup: _get(item, 'price', 'amount')."""
-    cur = item
-    for key in path:
-        if not isinstance(cur, dict):
-            return default
-        cur = cur.get(key)
-        if cur is None:
-            return default
-    return cur
-
-
-def _location(item: dict) -> Optional[str]:
-    addr = item.get("address") or {}
-    parts, seen = [addr.get("neighborhood"), addr.get("municipality"),
-                   addr.get("city"), addr.get("province")], []
-    for part in parts:
-        if part and part not in seen:
-            seen.append(str(part))
-    return ", ".join(seen) or None
-
-
-def _coords(item: dict) -> tuple[Optional[float], Optional[float]]:
-    lat = _get(item, "coordinates", "latitude")
-    lng = _get(item, "coordinates", "longitude")
-    try:
-        return (float(lat), float(lng)) if lat is not None and lng is not None else (None, None)
-    except (TypeError, ValueError):
-        return (None, None)
+def _price(item: dict):
+    for tx in item.get("transactions", []):
+        if tx.get("transactionTypeId") == 1 and tx.get("value"):
+            return tx["value"][0]
+    return None
 
 
 def _to_listing(item: dict) -> Listing:
-    detail = item.get("detailUrl") or ""
-    url = detail if detail.startswith("http") else (SITE + detail if detail else None)
-    lat, lng = _coords(item)
+    addr = item.get("address") or {}
+    coords = addr.get("coordinates") or {}
+    detail = (item.get("detail") or {}).get("es") or ""
+    floor = _feature(item, "floor")
     return Listing(
         source="fotocasa",
         id=str(item.get("id") or "") or None,
-        price=parse_price(_get(item, "price", "amount")),
-        size_m2=parse_size(_get(item, "features", "surface")),
-        rooms=parse_rooms(_get(item, "features", "rooms")),
-        floor=_get(item, "features", "floor"),
-        location=_location(item),
-        url=url,
-        lat=lat,
-        lng=lng,
+        price=parse_price(_price(item)),
+        size_m2=parse_size(_feature(item, "surface")),
+        rooms=parse_rooms(_feature(item, "rooms")),
+        floor=str(floor) if floor is not None else None,
+        location=addr.get("ubication"),
+        url=(SITE + detail) if detail else None,
+        lat=coords.get("latitude"),
+        lng=coords.get("longitude"),
         details=str(item.get("description") or ""),
     )
-
-
-def _run_actor(config, search_url: str) -> Iterable[dict]:
-    from apify_client import ApifyClient
-
-    client = ApifyClient(config.apify_token)
-    run_input = {"startUrl": search_url, "maxItems": config.max_listings}
-    run = client.actor(config.fotocasa_actor).call(run_input=run_input)
-    dataset_id = (
-        run.get("defaultDatasetId")
-        if isinstance(run, dict)
-        else getattr(run, "default_dataset_id", None)
-    )
-    if not dataset_id:
-        raise RuntimeError("Apify run returned no dataset id")
-    return client.dataset(dataset_id).iterate_items()

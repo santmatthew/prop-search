@@ -12,7 +12,8 @@ structure (`prop_search/models.py`); the rest of the pipeline is source-agnostic
 1. **Fetch** from each source with your base filters (price, size, bedrooms):
    - **idealista** — via an [Apify](https://apify.com) actor that handles DataDome
      internally (returns coordinates).
-   - **fotocasa** — via an Apify actor by search URL (returns coordinates).
+   - **fotocasa** — directly via its public gateway API
+     (`web.gw.fotocasa.es`); no auth, returns coordinates.
    - **redpiso** — directly via its internal JSON API (`/api/properties`); no
      coordinates, so these are geocoded.
 2. **Filter**: drop basements/semi-basements and manual exclusions (by id/area).
@@ -29,7 +30,7 @@ structure (`prop_search/models.py`); the rest of the pipeline is source-agnostic
 | Source | How | Cost |
 |---|---|---|
 | idealista | Apify actor | ~$0.0009/result (free Apify credit covers it) |
-| fotocasa | Apify actor | ~$1/1k results; **full sweeps need a paid Apify plan** (free plan caps ~5/run) |
+| fotocasa | its own gateway API | free |
 | redpiso | its own JSON API | free |
 
 Pick sources with `--sources idealista,redpiso` (default: all three).
