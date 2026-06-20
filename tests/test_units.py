@@ -222,6 +222,9 @@ def test_write_results(tmp_path):
     prefix = str(tmp_path / "out")
     csv_path, json_path, html_path = write_results(listings, prefix)
     assert open(csv_path).read().startswith("source,also_on,price")
-    assert '"transit_minutes": 18' in open(json_path).read()
+    body = open(json_path).read()
+    assert '"transit_minutes": 18' in body
+    assert '"price_per_m2": 3333' in body  # 300000/90
     page = open(html_path).read()
     assert "http://x" in page and "<table" in page
+    assert 'data-key="ppm2"' in page and "sortBy" in page  # sortable €/m² column
