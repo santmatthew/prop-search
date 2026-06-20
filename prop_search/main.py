@@ -191,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         "transit_default": config.slider_transit_default,
         "centre_max": config.max_centre_km,
         "has_transit": not config.skip_transit,
+        "destination": config.destination or "",
     }
     csv_path, json_path, html_path = write_results(results, config.out_prefix, controls)
     print_summary(results)

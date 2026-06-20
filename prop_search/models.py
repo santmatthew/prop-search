@@ -48,6 +48,8 @@ class Listing:
             "location": self.location,
             "centre_km": self.centre_km,
             "transit_minutes": self.transit_minutes,
+            "lat": self.lat,
+            "lng": self.lng,
             "url": self.url,
             "other_urls": ", ".join(self.other_urls),
         }
