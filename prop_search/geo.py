@@ -21,23 +21,22 @@ def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 
 
 def filter_by_centre(
-    listings: Iterable[dict],
+    listings: Iterable,
     centre_lat: float,
     centre_lng: float,
     max_km: float,
-) -> list[dict]:
+) -> list:
     """Keep listings within ``max_km`` of the centre, annotating ``centre_km``.
 
     Listings without coordinates (``lat``/``lng``) are dropped, since the
     distance cannot be computed.
     """
-    kept: list[dict] = []
+    kept = []
     for item in listings:
-        lat, lng = item.get("lat"), item.get("lng")
-        if lat is None or lng is None:
+        if item.lat is None or item.lng is None:
             continue
-        dist = haversine_km(centre_lat, centre_lng, lat, lng)
+        dist = haversine_km(centre_lat, centre_lng, item.lat, item.lng)
         if dist <= max_km:
-            item = {**item, "centre_km": round(dist, 3)}
+            item.centre_km = round(dist, 3)
             kept.append(item)
     return kept

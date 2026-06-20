@@ -58,10 +58,9 @@ class Geocoder:
         self._last_call = time.monotonic()
 
 
-def _listing_query(listing: dict) -> str:
+def _listing_query(listing) -> str:
     """Best available address string for a listing, biased to Madrid, Spain."""
-    parts = [p for p in (listing.get("title"), listing.get("location")) if p]
-    base = ", ".join(parts) if parts else ""
+    base = listing.location or ""
     if "madrid" not in base.lower():
         base = f"{base}, Madrid, Spain" if base else "Madrid, Spain"
     elif "spain" not in base.lower() and "españa" not in base.lower():
@@ -69,15 +68,12 @@ def _listing_query(listing: dict) -> str:
     return base
 
 
-def geocode_listings(listings: list[dict], geocoder: Geocoder) -> list[dict]:
-    """Fill in lat/lng for listings that lack coordinates."""
-    out: list[dict] = []
+def geocode_listings(listings: list, geocoder: Geocoder) -> list:
+    """Fill in lat/lng (in place) for listings that lack coordinates."""
     for listing in listings:
-        if listing.get("lat") is not None and listing.get("lng") is not None:
-            out.append(listing)
+        if listing.lat is not None and listing.lng is not None:
             continue
         coords = geocoder.geocode(_listing_query(listing))
         if coords:
-            listing = {**listing, "lat": coords[0], "lng": coords[1]}
-        out.append(listing)
-    return out
+            listing.lat, listing.lng = coords
+    return listings

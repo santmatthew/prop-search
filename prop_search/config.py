@@ -23,17 +23,25 @@ except ImportError:  # python-dotenv is optional at import time
 MADRID_CENTRE_LAT = 40.4168
 MADRID_CENTRE_LNG = -3.7038
 
-# Default Apify actor: handles DataDome internally (auto residential proxy on
-# free plans), no extra keys, returns coordinates. Accepts idealista URLs.
-DEFAULT_APIFY_ACTOR = "dz_omar/idealista-scraper-api"
+# Default Apify actors per source.
+IDEALISTA_ACTOR = "dz_omar/idealista-scraper-api"   # DataDome handled internally
+FOTOCASA_ACTOR = "azzouzana/fotocasa-es-search-results-scraper-by-search-url-ppr"
+
+DEFAULT_SOURCES = ["idealista", "fotocasa", "redpiso"]
 
 
 @dataclass
 class SearchConfig:
     """All parameters for a single search run."""
 
-    # --- Base idealista filters (applied via the search URL) ---
+    # --- Sources to query (translated into the common Listing structure) ---
+    sources: list[str] = field(default_factory=lambda: list(DEFAULT_SOURCES))
+
+    # --- Base filters (mapped to each source's own query) ---
     location: str = "madrid-madrid"  # idealista location slug
+    fotocasa_location: str = "madrid-capital"  # fotocasa location slug
+    redpiso_province: str = "madrid"  # redpiso province_slug
+    redpiso_place: Optional[str] = "madrid"  # redpiso place_slug (city); None = whole province
     operation: str = "venta-viviendas"  # sale of homes
     min_price: int = 250_000
     max_price: int = 380_000
@@ -69,23 +77,27 @@ class SearchConfig:
     # --- Secrets (from environment) ---
     apify_token: Optional[str] = field(default=None, repr=False)
     google_api_key: Optional[str] = field(default=None, repr=False)
-    apify_actor: str = DEFAULT_APIFY_ACTOR
+    idealista_actor: str = IDEALISTA_ACTOR
+    fotocasa_actor: str = FOTOCASA_ACTOR
     proxy_country: str = "ES"  # idealista geoblocks non-Spanish IPs
 
     @classmethod
     def from_env(cls) -> "SearchConfig":
-        """Build a config with secrets and actor pulled from the environment."""
+        """Build a config with secrets and actors pulled from the environment."""
         return cls(
             apify_token=os.getenv("APIFY_TOKEN"),
             google_api_key=os.getenv("GOOGLE_MAPS_API_KEY"),
-            apify_actor=os.getenv("APIFY_ACTOR", DEFAULT_APIFY_ACTOR),
+            idealista_actor=os.getenv("IDEALISTA_ACTOR", IDEALISTA_ACTOR),
+            fotocasa_actor=os.getenv("FOTOCASA_ACTOR", FOTOCASA_ACTOR),
         )
 
     def validate_for_run(self) -> None:
         """Raise a helpful error if required secrets/args are missing."""
-        if not self.apify_token:
+        needs_apify = any(s in ("idealista", "fotocasa") for s in self.sources)
+        if needs_apify and not self.apify_token:
             raise ValueError(
-                "APIFY_TOKEN is not set. Add it to your .env (see .env.example)."
+                "APIFY_TOKEN is not set (needed for idealista/fotocasa). Add it to "
+                "your .env (see .env.example), or use --sources redpiso."
             )
         if not self.skip_transit:
             # Geocoding uses free Nominatim; only the transit step needs Google.

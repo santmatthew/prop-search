@@ -1,4 +1,4 @@
-"""Write results to CSV and JSON and print a summary table."""
+"""Write results to CSV, JSON and HTML, and print a summary table."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from datetime import datetime
 from typing import Optional
 
 FIELDS = [
-    "title",
+    "source",
+    "also_on",
     "price",
     "size_m2",
     "rooms",
@@ -18,20 +19,22 @@ FIELDS = [
     "centre_km",
     "transit_minutes",
     "url",
+    "other_urls",
 ]
 
 
-def _sort_key(item: dict):
+def _sort_key(item):
     # Sort by transit time when available, else by distance from centre.
     return (
-        item.get("transit_minutes") if item.get("transit_minutes") is not None else 1e9,
-        item.get("centre_km") if item.get("centre_km") is not None else 1e9,
+        item.transit_minutes if item.transit_minutes is not None else 1e9,
+        item.centre_km if item.centre_km is not None else 1e9,
     )
 
 
-def write_results(listings: list[dict], out_prefix: str) -> tuple[str, str, str]:
+def write_results(listings: list, out_prefix: str) -> tuple[str, str, str]:
     """Write ``<prefix>.csv``, ``.json`` and ``.html``; return the three paths."""
     ordered = sorted(listings, key=_sort_key)
+    rows = [l.to_row() for l in ordered]
 
     csv_path = f"{out_prefix}.csv"
     json_path = f"{out_prefix}.json"
@@ -40,11 +43,10 @@ def write_results(listings: list[dict], out_prefix: str) -> tuple[str, str, str]
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=FIELDS, extrasaction="ignore")
         writer.writeheader()
-        for item in ordered:
-            writer.writerow(item)
+        writer.writerows(rows)
 
     with open(json_path, "w", encoding="utf-8") as fh:
-        json.dump(ordered, fh, ensure_ascii=False, indent=2)
+        json.dump(rows, fh, ensure_ascii=False, indent=2)
 
     with open(html_path, "w", encoding="utf-8") as fh:
         fh.write(render_html(ordered))
@@ -52,33 +54,37 @@ def write_results(listings: list[dict], out_prefix: str) -> tuple[str, str, str]
     return csv_path, json_path, html_path
 
 
-def render_html(listings: list[dict], title: str = "Madrid property search") -> str:
+def render_html(listings: list, title: str = "Madrid property search") -> str:
     """Return a self-contained HTML page with clickable listing links."""
     ordered = sorted(listings, key=_sort_key)
     generated = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     rows = []
     for i, item in enumerate(ordered, 1):
-        url = item.get("url") or ""
-        loc = html.escape(str(item.get("location") or ""))
-        price = item.get("price")
+        url = item.url or ""
+        loc = html.escape(str(item.location or ""))
+        src = html.escape(item.source)
+        if item.also_on:
+            src += " <span class='also'>+ " + html.escape(", ".join(item.also_on)) + "</span>"
+        price = item.price
         price_str = f"€{price:,}" if isinstance(price, int) else _fmt(price)
         link = (
-            f'<a href="{html.escape(url)}" target="_blank" rel="noopener">View on idealista ↗</a>'
+            f'<a href="{html.escape(url)}" target="_blank" rel="noopener">View ↗</a>'
             if url else "&mdash;"
         )
         rows.append(
             "<tr class='data'>"
             f"<td class='num'>{i}</td>"
             f"<td class='price'>{price_str}</td>"
-            f"<td class='num'>{_fmt(item.get('size_m2'))}</td>"
-            f"<td class='num'>{_fmt(item.get('rooms'))}</td>"
-            f"<td class='num'>{_fmt(item.get('transit_minutes'))}</td>"
-            f"<td class='num'>{_fmt(item.get('centre_km'))}</td>"
+            f"<td class='num'>{_fmt(item.size_m2)}</td>"
+            f"<td class='num'>{_fmt(item.rooms)}</td>"
+            f"<td class='num'>{_fmt(item.transit_minutes)}</td>"
+            f"<td class='num'>{_fmt(item.centre_km)}</td>"
+            f"<td>{src}</td>"
             f"<td>{link}</td>"
             "</tr>"
             "<tr class='loc'>"
-            f"<td colspan='7'>{loc or '&mdash;'}</td>"
+            f"<td colspan='8'>{loc or '&mdash;'}</td>"
             "</tr>"
         )
 
@@ -102,6 +108,7 @@ def render_html(listings: list[dict], title: str = "Madrid property search") -> 
   a {{ color: #0a64c2; text-decoration: none; white-space: nowrap; }}
   tr.data td {{ border-bottom: none; }}
   tr.loc td {{ color: #777; font-size: .72rem; padding-top: 0; padding-bottom: 12px; }}
+  .also {{ color: #888; font-size: .8rem; }}
 </style>
 </head>
 <body>
@@ -110,7 +117,7 @@ def render_html(listings: list[dict], title: str = "Madrid property search") -> 
 <table>
 <thead><tr>
   <th class="num">#</th><th>Price</th><th class="num">m²</th><th class="num">bed</th>
-  <th class="num">min</th><th class="num">km</th><th>Link</th>
+  <th class="num">min</th><th class="num">km</th><th>Source</th><th>Link</th>
 </tr></thead>
 <tbody>
 {chr(10).join(rows)}
@@ -121,24 +128,26 @@ def render_html(listings: list[dict], title: str = "Madrid property search") -> 
 """
 
 
-def print_summary(listings: list[dict], max_rows: int = 25) -> None:
+def print_summary(listings: list, max_rows: int = 30) -> None:
     """Print a compact table of the top results to stdout."""
     ordered = sorted(listings, key=_sort_key)
     print(f"\n{len(ordered)} matching listing(s):\n")
     if not ordered:
         return
 
-    header = f"{'price':>9}  {'m2':>4}  {'bed':>3}  {'km':>5}  {'min':>4}  location"
+    header = f"{'price':>9}  {'m2':>4}  {'bed':>3}  {'km':>5}  {'min':>4}  {'source':<10}  location"
     print(header)
     print("-" * len(header))
     for item in ordered[:max_rows]:
+        src = item.source + ("+" if item.also_on else "")
         print(
-            f"{_fmt(item.get('price')):>9}  "
-            f"{_fmt(item.get('size_m2')):>4}  "
-            f"{_fmt(item.get('rooms')):>3}  "
-            f"{_fmt(item.get('centre_km')):>5}  "
-            f"{_fmt(item.get('transit_minutes')):>4}  "
-            f"{(item.get('location') or '')[:40]}"
+            f"{_fmt(item.price):>9}  "
+            f"{_fmt(item.size_m2):>4}  "
+            f"{_fmt(item.rooms):>3}  "
+            f"{_fmt(item.centre_km):>5}  "
+            f"{_fmt(item.transit_minutes):>4}  "
+            f"{src:<10}  "
+            f"{(item.location or '')[:38]}"
         )
     if len(ordered) > max_rows:
         print(f"... and {len(ordered) - max_rows} more (see output files)")

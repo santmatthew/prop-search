@@ -35,16 +35,13 @@ def is_basement(text: object) -> bool:
     return bool(_BASEMENT_TEXT_RE.search(str(text)))
 
 
-def filter_out_basement(listings: list[dict]) -> list[dict]:
-    """Drop listings whose floor/title/details indicate a (semi-)basement."""
-    kept: list[dict] = []
+def filter_out_basement(listings: list) -> list:
+    """Drop listings whose floor/details indicate a (semi-)basement."""
+    kept = []
     for item in listings:
-        if is_basement_floor(item.get("floor")):
+        if is_basement_floor(item.floor):
             continue
-        blob = " ".join(
-            str(item.get(k) or "") for k in ("title", "details", "description")
-        )
-        if is_basement(blob):
+        if is_basement(item.details):
             continue
         kept.append(item)
     return kept

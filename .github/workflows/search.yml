@@ -15,6 +15,10 @@ on:
         description: "Max public-transport minutes (arrive by 9am weekday)"
         required: true
         default: "25"
+      sources:
+        description: "Sources (comma-separated: idealista,fotocasa,redpiso)"
+        required: false
+        default: "idealista,fotocasa,redpiso"
       no_transit:
         description: "Skip the transit step (location filter only)"
         type: boolean
@@ -54,6 +58,7 @@ jobs:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           DESTINATION: ${{ inputs.destination }}
           MAX_MINUTES: ${{ inputs.max_minutes }}
+          SOURCES: ${{ inputs.sources }}
           NO_TRANSIT: ${{ inputs.no_transit }}
           MAX_PRICE: ${{ inputs.max_price }}
           MIN_SIZE: ${{ inputs.min_size }}
@@ -67,6 +72,7 @@ jobs:
             exit 1
           fi
           args=(--destination "$DESTINATION" --max-minutes "$MAX_MINUTES")
+          [ -n "$SOURCES" ] && args+=(--sources "$SOURCES")
           [ "$NO_TRANSIT" = "true" ] && args+=(--no-transit)
           [ -n "$MAX_PRICE" ] && args+=(--max-price "$MAX_PRICE")
           [ -n "$MIN_SIZE" ] && args+=(--min-size "$MIN_SIZE")

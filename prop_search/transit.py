@@ -113,19 +113,19 @@ def _parse_duration(value) -> Optional[float]:
 
 
 def filter_by_transit(
-    listings: list[dict],
+    listings: list,
     timer: TransitTimer,
     dest_lat: float,
     dest_lng: float,
     max_minutes: float,
-) -> list[dict]:
+) -> list:
     """Keep listings reachable within ``max_minutes``, annotating ``transit_minutes``."""
-    kept: list[dict] = []
+    kept = []
     for listing in listings:
-        lat, lng = listing.get("lat"), listing.get("lng")
-        if lat is None or lng is None:
+        if listing.lat is None or listing.lng is None:
             continue
-        mins = timer.minutes(lat, lng, dest_lat, dest_lng)
+        mins = timer.minutes(listing.lat, listing.lng, dest_lat, dest_lng)
         if mins is not None and mins <= max_minutes:
-            kept.append({**listing, "transit_minutes": mins})
+            listing.transit_minutes = mins
+            kept.append(listing)
     return kept

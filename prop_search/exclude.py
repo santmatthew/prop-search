@@ -19,29 +19,28 @@ def _norm(text: object) -> str:
     return s.lower()
 
 
-def listing_id(listing: dict) -> str | None:
-    """idealista property code, from the explicit field or the URL."""
-    if listing.get("id"):
-        return str(listing["id"])
-    url = listing.get("url") or ""
-    match = re.search(r"/inmueble/(\d+)", url)
+def listing_id(listing) -> str | None:
+    """Property code, from the explicit field or the URL."""
+    if listing.id:
+        return str(listing.id)
+    match = re.search(r"/inmueble/(\d+)", listing.url or "")
     return match.group(1) if match else None
 
 
 def apply_exclusions(
-    listings: list[dict],
+    listings: list,
     exclude_ids: list[str] | None,
     exclude_areas: list[str] | None,
-) -> list[dict]:
+) -> list:
     """Drop listings matching an excluded id or area."""
     ids = {str(i) for i in (exclude_ids or [])}
     areas = [_norm(a) for a in (exclude_areas or []) if a]
 
-    kept: list[dict] = []
+    kept = []
     for item in listings:
         if listing_id(item) in ids:
             continue
-        location = _norm(item.get("location"))
+        location = _norm(item.location)
         if any(area in location for area in areas):
             continue
         kept.append(item)

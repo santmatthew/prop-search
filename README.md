@@ -1,25 +1,38 @@
 # prop-search
 
-Find Madrid flats on **idealista.com** that match your criteria, then narrow them
-to homes within `n` minutes of a chosen location **by public transport**.
+Find Madrid flats across **idealista**, **fotocasa** and **redpiso** that match
+your criteria, deduplicate across portals, then narrow to homes within `n`
+minutes of a chosen location **by public transport**.
 
 ## How it works
 
-idealista is protected by DataDome (aggressive anti-bot), so this tool does **not**
-scrape the site directly. Instead it runs a pipeline:
+Each source is an adapter that translates its portal into one common `Listing`
+structure (`prop_search/models.py`); the rest of the pipeline is source-agnostic:
 
-1. **Build** an idealista search URL from your base filters (price, size, bedrooms).
-2. **Scrape** matching listings through a third-party scraping API
-   ([Apify](https://apify.com) idealista actor — handles DataDome + proxies).
-3. **Geocode** each listing (Google Geocoding API) and keep those within
-   `--max-centre-km` of Madrid's centre (Puerta del Sol).
-4. **Transit filter:** for the survivors, call the **Google Routes API** (transit
-   mode) and keep listings reachable within `--max-minutes` of your destination.
-5. **Output** `results.csv` + `results.json`, sorted by travel time.
+1. **Fetch** from each source with your base filters (price, size, bedrooms):
+   - **idealista** — via an [Apify](https://apify.com) actor that handles DataDome
+     internally (returns coordinates).
+   - **fotocasa** — via an Apify actor by search URL (returns coordinates).
+   - **redpiso** — directly via its internal JSON API (`/api/properties`); no
+     coordinates, so these are geocoded.
+2. **Filter**: drop basements/semi-basements and manual exclusions (by id/area).
+3. **Geocode** listings missing coordinates (free OpenStreetMap Nominatim) and keep
+   those within `--max-centre-km` of Madrid's centre (Puerta del Sol).
+4. **Dedup**: merge the same flat appearing on multiple portals (close price +
+   size + location); the duplicates are recorded on the survivor (`also_on`).
+5. **Transit filter**: call the **Google Routes API** (transit, arrive-by-9am
+   weekday) and keep listings reachable within `--max-minutes` of your destination.
+6. **Output** `results.csv` / `.json` / `.html`, sorted by travel time.
 
-> The idealista login is **not** needed for this approach — the scraping service
-> handles access. Credentials are kept in `.env` only as a placeholder for a
-> possible future login-based path.
+### Sources & cost
+
+| Source | How | Cost |
+|---|---|---|
+| idealista | Apify actor | ~$0.0009/result (free Apify credit covers it) |
+| fotocasa | Apify actor | ~$1/1k results; **full sweeps need a paid Apify plan** (free plan caps ~5/run) |
+| redpiso | its own JSON API | free |
+
+Pick sources with `--sources idealista,redpiso` (default: all three).
 
 ## Setup
 

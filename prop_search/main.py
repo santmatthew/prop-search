@@ -1,4 +1,4 @@
-"""CLI: scrape idealista, filter by centre distance and transit time, write output.
+"""CLI: search multiple property sources, filter, dedup, and write output.
 
 Example:
     python -m prop_search.main \\
@@ -11,18 +11,21 @@ import argparse
 import sys
 
 from .config import SearchConfig
+from .dedup import dedup
 from .exclude import apply_exclusions
 from .floors import filter_out_basement
 from .geo import filter_by_centre
 from .geocode import Geocoder, geocode_listings
 from .idealista_url import build_search_url
 from .output import print_summary, write_results
-from .scraper import scrape
+from .sources import get_sources
 from .transit import TransitTimer, filter_by_transit
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Idealista scraper + transit-time filter")
+    p = argparse.ArgumentParser(description="Multi-source property search + transit filter")
+    p.add_argument("--sources", help="comma-separated sources "
+                   "(idealista,fotocasa,redpiso); default all")
     # Base filters
     p.add_argument("--location", help="idealista location slug (default madrid-madrid)")
     p.add_argument("--operation", help="idealista operation slug (default venta-viviendas)")
@@ -78,6 +81,9 @@ def config_from_args(args: argparse.Namespace) -> SearchConfig:
         if value is not None:
             setattr(config, key, value)
 
+    if args.sources:
+        config.sources = [s.strip() for s in args.sources.split(",") if s.strip()]
+
     # Exclusions from the CLI are additive to the configured defaults.
     if args.exclude_id:
         config.exclude_ids = list(config.exclude_ids) + args.exclude_id
@@ -101,13 +107,29 @@ def _resolve_destination(config: SearchConfig, geocoder: Geocoder) -> tuple[floa
     return coords
 
 
-def run(config: SearchConfig) -> list[dict]:
+def _fetch_all(config: SearchConfig) -> list:
+    """Fetch from each configured source, translating to common Listings.
+
+    A failure in one source is reported but does not abort the others.
+    """
+    listings = []
+    for source in get_sources(config.sources):
+        print(f"Fetching {source.name}...")
+        try:
+            found = source.fetch(config)
+        except Exception as exc:  # one bad source shouldn't kill the run
+            print(f"  ! {source.name} failed: {exc}")
+            continue
+        print(f"  {len(found)} from {source.name}.")
+        listings.extend(found)
+    return listings
+
+
+def run(config: SearchConfig) -> list:
     config.validate_for_run()
 
-    print(f"Search URL: {build_search_url(config)}")
-    print("Scraping idealista via Apify...")
-    listings = scrape(config)
-    print(f"  {len(listings)} listing(s) returned.")
+    listings = _fetch_all(config)
+    print(f"{len(listings)} total listing(s) across sources.")
 
     if config.exclude_basement:
         before = len(listings)
@@ -129,6 +151,11 @@ def run(config: SearchConfig) -> list[dict]:
         listings, config.centre_lat, config.centre_lng, config.max_centre_km
     )
     print(f"  {len(listings)} within {config.max_centre_km} km of centre.")
+
+    before = len(listings)
+    listings = dedup(listings)
+    print(f"  {len(listings)} after cross-source dedup "
+          f"({before - len(listings)} merged).")
 
     if not config.skip_transit:
         dest_lat, dest_lng = _resolve_destination(config, geocoder)
