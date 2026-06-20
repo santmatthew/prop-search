@@ -1,0 +1,129 @@
+name: Property search
+
+# Run from your phone: GitHub -> Actions tab -> "Property search" -> Run workflow.
+# After it finishes the report is published to GitHub Pages (a stable public URL,
+# e.g. https://<user>.github.io/prop-search/) and also attached as an artifact.
+#
+# One-time setup: repo Settings -> Pages -> "Build and deployment" -> Source =
+# "GitHub Actions"; and add APIFY_TOKEN + GOOGLE_MAPS_API_KEY repo secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      destination:
+        description: "Commute destination (address or 'lat,lng')"
+        required: true
+        default: "Calle del General Díaz Porlier, 25, Salamanca, 28001 Madrid, Spain"
+      max_minutes:
+        description: "Max public-transport minutes (arrive by 9am weekday)"
+        required: true
+        default: "25"
+      sources:
+        description: "Sources (comma-separated: idealista,fotocasa,redpiso)"
+        required: false
+        default: "idealista,fotocasa,redpiso"
+      no_transit:
+        description: "Skip the transit step (location filter only)"
+        type: boolean
+        default: false
+      max_price:
+        description: "Override max price (euros). Blank = default 380000"
+        required: false
+      min_size:
+        description: "Override min size (m2). Blank = default 70"
+        required: false
+      max_centre_km:
+        description: "Override max distance from centre (km). Blank = default 6"
+        required: false
+      exclude_id:
+        description: "Extra idealista property code to exclude"
+        required: false
+      exclude_area:
+        description: "Extra neighborhood/area to exclude"
+        required: false
+
+# Needed for the GitHub Pages deploy.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run property search
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          DESTINATION: ${{ inputs.destination }}
+          MAX_MINUTES: ${{ inputs.max_minutes }}
+          SOURCES: ${{ inputs.sources }}
+          NO_TRANSIT: ${{ inputs.no_transit }}
+          MAX_PRICE: ${{ inputs.max_price }}
+          MIN_SIZE: ${{ inputs.min_size }}
+          MAX_CENTRE_KM: ${{ inputs.max_centre_km }}
+          EXCLUDE_ID: ${{ inputs.exclude_id }}
+          EXCLUDE_AREA: ${{ inputs.exclude_area }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APIFY_TOKEN:-}" ] || [ -z "${GOOGLE_MAPS_API_KEY:-}" ]; then
+            echo "::error::Set APIFY_TOKEN and GOOGLE_MAPS_API_KEY as repository secrets (Settings -> Secrets and variables -> Actions)."
+            exit 1
+          fi
+          args=(--destination "$DESTINATION" --max-minutes "$MAX_MINUTES")
+          [ -n "$SOURCES" ] && args+=(--sources "$SOURCES")
+          [ "$NO_TRANSIT" = "true" ] && args+=(--no-transit)
+          [ -n "$MAX_PRICE" ] && args+=(--max-price "$MAX_PRICE")
+          [ -n "$MIN_SIZE" ] && args+=(--min-size "$MIN_SIZE")
+          [ -n "$MAX_CENTRE_KM" ] && args+=(--max-centre-km "$MAX_CENTRE_KM")
+          [ -n "$EXCLUDE_ID" ] && args+=(--exclude-id "$EXCLUDE_ID")
+          [ -n "$EXCLUDE_AREA" ] && args+=(--exclude-area "$EXCLUDE_AREA")
+          python -m prop_search.main "${args[@]}"
+
+      - name: Assemble Pages site
+        run: |
+          mkdir -p public
+          cp results.html public/index.html
+          cp results.csv public/ 2>/dev/null || true
+          cp results.json public/ 2>/dev/null || true
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: |
+            results.csv
+            results.json
+            results.html
+          if-no-files-found: warn
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: search
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

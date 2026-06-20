@@ -1,0 +1,4 @@
+apify-client>=1.7
+requests>=2.31
+python-dotenv>=1.0
+pytest>=8.0
