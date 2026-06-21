@@ -23,8 +23,16 @@ def _norm(text: object) -> str:
 # "libre de okupas", "plena propiedad").
 _PATTERNS: list[tuple[str, re.Pattern]] = [
     ("nuda_propiedad", re.compile(r"nuda\s*propiedad")),
-    ("tenants", re.compile(r"con\s+inquilin")),                 # "alquilada, con inquilinos"
-    ("squatters", re.compile(r"ocupad[ao]\s+ilegal|ocupacion\s+ilegal")),
+    # rented out: "con inquilinos", "se encuentra alquilado", "vivienda alquilada"
+    # ("alquilad[ao]s?" is the participle; infinitive "alquilar"/noun "alquiler"
+    # — e.g. "ideal para alquilar" — are intentionally NOT matched).
+    ("tenants", re.compile(r"con\s+inquilin|\balquilad[ao]s?\b")),
+    # squatter / no-possession: "okupado", "ocupación ilegal", "sin posesión",
+    # or "ocupado/ocupada" — but NOT "desocupado" (vacant, word boundary), "no
+    # ocupado", or "ocupada por el/su/los propietario(s)" (owner-occupied).
+    ("squatters", re.compile(
+        r"\bokupad[ao]s?\b|ocupacion\s+ilegal|sin\s+posesion|"
+        r"(?<!no )\bocupad[ao]s?\b(?!\s+por\s+(el|su|los|sus)\s+propietari)")),
     ("no_visit", re.compile(r"no\s+se\s+puede\s+visitar")),     # occupied/auction, no viewing
 ]
 

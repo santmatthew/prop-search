@@ -135,6 +135,17 @@ def test_excluded_condition_detection():
     assert excluded_condition("Ocupación ilegal, precio rebajado") == "squatters"
     assert excluded_condition("El contrato acaba, no se puede visitar.") == "no_visit"
     assert excluded_condition("Cita previa para visitar, se puede visitar") is None
+    # rented out via "alquilado" participle (not just "con inquilinos")
+    assert excluded_condition("Actualmente el piso se encuentra alquilado") == "tenants"
+    assert excluded_condition("Vivienda alquilada, ideal para inversor") == "tenants"
+    assert excluded_condition("Piso ideal para alquilar, gran rentabilidad") is None
+    # squatter / no-possession variants
+    assert excluded_condition("Inmueble okupado, oportunidad") == "squatters"
+    assert excluded_condition("Se transmite sin posesión") == "squatters"
+    assert excluded_condition("Ocupado por persona sin justo título") == "squatters"
+    # owner-occupied and vacant must NOT match
+    assert excluded_condition("Vivienda desocupada, lista para entrar") is None
+    assert excluded_condition("Actualmente ocupada por el propietario") is None
     # Negations / good listings must NOT match
     assert excluded_condition("Vivienda en plena propiedad, libre") is None
     assert excluded_condition("Sin inquilinos, libre de okupas") is None
