@@ -147,6 +147,11 @@ def test_excluded_condition_detection():
     assert excluded_condition("Actualmente el piso se encuentra alquilado") == "tenants"
     assert excluded_condition("Vivienda alquilada, ideal para inversor") == "tenants"
     assert excluded_condition("Piso ideal para alquilar, gran rentabilidad") is None
+    # more rented phrasings (no "alquilado"/"inquilino" word)
+    assert excluded_condition("tiene a una familia residiendo que termina el contrato el 23 de julio") == "tenants"
+    assert excluded_condition("vivienda arrendada con contrato en vigor") == "tenants"
+    assert excluded_condition("con contrato de alquiler vigente hasta 2027") == "tenants"
+    assert excluded_condition("se vende con contrato de arras antes de junio") is None
     # squatter / no-possession variants
     assert excluded_condition("Inmueble okupado, oportunidad") == "squatters"
     assert excluded_condition("Se transmite sin posesión") == "squatters"
