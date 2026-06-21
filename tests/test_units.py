@@ -12,6 +12,7 @@ from prop_search.models import Listing
 from prop_search.parsing import parse_price, parse_rooms, parse_size
 from prop_search.sources.fotocasa import _to_listing as fotocasa_to_listing
 from prop_search.sources.idealista import _to_listing as idealista_to_listing
+from prop_search.sources.redpiso import _strip_html as redpiso_strip_html
 from prop_search.sources.redpiso import _to_listing as redpiso_to_listing
 from prop_search.transit import _parse_duration, filter_by_transit
 from prop_search.output import write_results
@@ -107,6 +108,13 @@ def test_redpiso_to_listing():
     assert out.source == "redpiso" and out.price == 275000 and out.size_m2 == 97
     assert out.url == "https://www.redpiso.es/inmueble/piso-en-venta-RP1"
     assert out.lat is None  # geocoded later
+
+
+def test_redpiso_strip_html_enables_condition_detection():
+    raw = "<p>Piso en La Almudena.</p><p>Actualmente el piso se encuentra alquilado.</p>"
+    text = redpiso_strip_html(raw)
+    assert "<" not in text
+    assert excluded_condition(text) == "tenants"
 
 
 def test_redpiso_builds_precise_address_from_structured_location():

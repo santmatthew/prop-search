@@ -8,14 +8,18 @@ by the pipeline (Nominatim) from their address.
 
 from __future__ import annotations
 
+import re
+
 import requests
 
+from ..cache import JsonCache
 from ..models import Listing
 from ..parsing import first
 from .base import Source
 
 API_URL = "https://www.redpiso.es/api/properties"
 DETAIL_BASE = "https://www.redpiso.es/inmueble"
+DETAIL_CACHE = ".cache/redpiso_detail.json"
 PAGE_SIZE = 50
 USER_AGENT = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
@@ -48,6 +52,7 @@ class RedpisoSource(Source):
 
         headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
         session = requests.Session()
+        detail_cache = JsonCache(DETAIL_CACHE)
 
         listings: list[Listing] = []
         page = 1
@@ -60,7 +65,14 @@ class RedpisoSource(Source):
             if not items:
                 break
             for raw in items:
-                listings.append(_to_listing(raw))
+                listing = _to_listing(raw)
+                # The list API has no usable description; the long description
+                # (needed for condition filters: alquilado/ocupado/nuda) lives in
+                # the per-property detail API. Fetch it (cached) and fold in.
+                long_desc = _long_description(session, headers, listing.id, detail_cache)
+                if long_desc:
+                    listing.details = f"{listing.details} {long_desc}".strip()
+                listings.append(listing)
                 if config.limit and len(listings) >= config.limit:
                     return listings
             total = data.get("total") or 0
@@ -68,6 +80,28 @@ class RedpisoSource(Source):
                 break
             page += 1
         return listings
+
+
+def _strip_html(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text or "")).strip()
+
+
+def _long_description(session, headers, code, cache: JsonCache) -> str:
+    """Fetch a property's long description from the detail API (cached by code)."""
+    if not code:
+        return ""
+    hit = cache.get(code)
+    if hit is not None:
+        return hit
+    try:
+        resp = session.get(f"{API_URL}/{code}", headers=headers, timeout=30)
+        resp.raise_for_status()
+        prop = (resp.json() or {}).get("property") or {}
+        text = _strip_html(prop.get("long_description") or "")
+        cache.set(code, text)  # cache successful fetches; let failures retry
+        return text
+    except Exception:
+        return ""
 
 
 def _location(item: dict) -> str | None:
