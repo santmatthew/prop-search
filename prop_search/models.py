@@ -43,6 +43,8 @@ class Listing:
             "also_on": ", ".join(self.also_on),
             "price": self.price,
             "size_m2": self.size_m2,
+            "price_per_m2": (round(self.price / self.size_m2)
+                             if self.price and self.size_m2 else None),
             "rooms": self.rooms,
             "floor": self.floor,
             "location": self.location,

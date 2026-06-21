@@ -12,6 +12,7 @@ from prop_search.models import Listing
 from prop_search.parsing import parse_price, parse_rooms, parse_size
 from prop_search.sources.fotocasa import _to_listing as fotocasa_to_listing
 from prop_search.sources.idealista import _to_listing as idealista_to_listing
+from prop_search.sources.redpiso import _strip_html as redpiso_strip_html
 from prop_search.sources.redpiso import _to_listing as redpiso_to_listing
 from prop_search.transit import _parse_duration, filter_by_transit
 from prop_search.output import write_results
@@ -76,6 +77,25 @@ def test_fotocasa_to_listing():
     assert out.lat == 40.41 and out.location == "Calle X, Carabanchel"
 
 
+def test_fotocasa_location_includes_neighborhood_and_excludes_lavapies():
+    # When the street is hidden, ubication is just "Centro"; the neighborhood
+    # ("Embajadores - Lavapiés") must come from upperLevel/level8 so the
+    # lavapies area exclusion can catch it.
+    out = fotocasa_to_listing({
+        "id": 185477979,
+        "transactions": [{"transactionTypeId": 1, "value": [300000]}],
+        "features": [{"key": "surface", "value": [80]}, {"key": "rooms", "value": [2]}],
+        "address": {"ubication": "Centro",
+                    "location": {"upperLevel": "Embajadores - Lavapiés",
+                                 "level8": "Embajadores - Lavapiés"},
+                    "coordinates": {"latitude": 40.41, "longitude": -3.70}},
+        "detail": {"es": "/es/comprar/vivienda/madrid-capital/parking/185477979/d"},
+    })
+    assert "Lavapiés" in out.location
+    kept = apply_exclusions([out], exclude_ids=[], exclude_areas=["lavapies"])
+    assert kept == []
+
+
 def test_redpiso_to_listing():
     out = redpiso_to_listing({
         "code": "RP1",
@@ -88,6 +108,13 @@ def test_redpiso_to_listing():
     assert out.source == "redpiso" and out.price == 275000 and out.size_m2 == 97
     assert out.url == "https://www.redpiso.es/inmueble/piso-en-venta-RP1"
     assert out.lat is None  # geocoded later
+
+
+def test_redpiso_strip_html_enables_condition_detection():
+    raw = "<p>Piso en La Almudena.</p><p>Actualmente el piso se encuentra alquilado.</p>"
+    text = redpiso_strip_html(raw)
+    assert "<" not in text
+    assert excluded_condition(text) == "tenants"
 
 
 def test_redpiso_builds_precise_address_from_structured_location():
@@ -114,6 +141,19 @@ def test_excluded_condition_detection():
     assert excluded_condition("Piso alquilado, con inquilinos") == "tenants"
     assert excluded_condition("Vivienda ocupada ilegalmente") == "squatters"
     assert excluded_condition("Ocupación ilegal, precio rebajado") == "squatters"
+    assert excluded_condition("El contrato acaba, no se puede visitar.") == "no_visit"
+    assert excluded_condition("Cita previa para visitar, se puede visitar") is None
+    # rented out via "alquilado" participle (not just "con inquilinos")
+    assert excluded_condition("Actualmente el piso se encuentra alquilado") == "tenants"
+    assert excluded_condition("Vivienda alquilada, ideal para inversor") == "tenants"
+    assert excluded_condition("Piso ideal para alquilar, gran rentabilidad") is None
+    # squatter / no-possession variants
+    assert excluded_condition("Inmueble okupado, oportunidad") == "squatters"
+    assert excluded_condition("Se transmite sin posesión") == "squatters"
+    assert excluded_condition("Ocupado por persona sin justo título") == "squatters"
+    # owner-occupied and vacant must NOT match
+    assert excluded_condition("Vivienda desocupada, lista para entrar") is None
+    assert excluded_condition("Actualmente ocupada por el propietario") is None
     # Negations / good listings must NOT match
     assert excluded_condition("Vivienda en plena propiedad, libre") is None
     assert excluded_condition("Sin inquilinos, libre de okupas") is None
@@ -163,6 +203,20 @@ def test_listing_id_and_exclusions():
          L(id="y", location="Arapiles, Chamberí")],
         exclude_ids=["110706020"], exclude_areas=["lavapies"])
     assert [k.id for k in kept] == ["y"]
+
+
+def test_exclude_phrase_in_description():
+    # Mis-listed: structured location says Madrid, description says "en Turre".
+    listings = [
+        L(id="mad", location="Centro, Cortes - Huertas", details="Piso en pleno centro"),
+        L(id="turre", location="Centro, Cortes - Huertas",
+          details="Magnífica casa de 305 metros, en Turre. Ideal para familias."),
+        L(id="ok", location="Calle de Toledo, Centro", details="Junto a la Calle de Toledo"),
+    ]
+    kept = apply_exclusions(listings, exclude_ids=[], exclude_areas=[],
+                            exclude_phrases=["turre"])
+    # 'turre' dropped; 'Calle de Toledo' kept (word-boundary, no false positive)
+    assert [k.id for k in kept] == ["mad", "ok"]
 
 
 def test_haversine_and_centre_filter():
@@ -222,6 +276,9 @@ def test_write_results(tmp_path):
     prefix = str(tmp_path / "out")
     csv_path, json_path, html_path = write_results(listings, prefix)
     assert open(csv_path).read().startswith("source,also_on,price")
-    assert '"transit_minutes": 18' in open(json_path).read()
+    body = open(json_path).read()
+    assert '"transit_minutes": 18' in body
+    assert '"price_per_m2": 3333' in body  # 300000/90
     page = open(html_path).read()
     assert "http://x" in page and "<table" in page
+    assert 'data-key="ppm2"' in page and "sortBy" in page  # sortable €/m² column

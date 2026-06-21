@@ -14,6 +14,7 @@ FIELDS = [
     "also_on",
     "price",
     "size_m2",
+    "price_per_m2",
     "rooms",
     "floor",
     "location",
@@ -77,6 +78,13 @@ def _eur(n) -> str:
     return "€{:,}".format(n) if isinstance(n, int) else "-"
 
 
+def _ppm2(price, size) -> Optional[int]:
+    """Price per square metre (rounded), or None if either input is missing."""
+    if price and size:
+        return round(price / size)
+    return None
+
+
 def _maps_url(lat, lng, dest: str) -> str:
     return ("https://www.google.com/maps/dir/?api=1&origin="
             f"{lat},{lng}&destination={urllib.parse.quote(dest)}&travelmode=transit")
@@ -101,16 +109,25 @@ def _row_html(i: int, l, has_transit: bool, dest: str, ncols: int) -> str:
     link = (f'<a href="{html.escape(l.url)}" target="_blank" rel="noopener">View ↗</a>'
             if l.url else "—")
 
-    dprice = l.price if l.price is not None else ""
-    dmin = l.transit_minutes if l.transit_minutes is not None else ""
-    dkm = l.centre_km if l.centre_km is not None else ""
+    ppm2 = _ppm2(l.price, l.size_m2)
+    d = {
+        "price": l.price if l.price is not None else "",
+        "size": l.size_m2 if l.size_m2 is not None else "",
+        "ppm2": ppm2 if ppm2 is not None else "",
+        "beds": l.rooms if l.rooms is not None else "",
+        "min": l.transit_minutes if l.transit_minutes is not None else "",
+        "km": l.centre_km if l.centre_km is not None else "",
+    }
     dsrc = html.escape(" ".join(l.all_sources()))
 
     return (
-        f'<tr class="data" data-price="{dprice}" data-min="{dmin}" data-km="{dkm}" data-src="{dsrc}">'
+        f'<tr class="data" data-price="{d["price"]}" data-size="{d["size"]}" '
+        f'data-ppm2="{d["ppm2"]}" data-beds="{d["beds"]}" data-min="{d["min"]}" '
+        f'data-km="{d["km"]}" data-src="{dsrc}">'
         f'<td class="num idx">{i}</td>'
         f'<td class="price">{_eur(l.price)}</td>'
         f'<td class="num">{_fmt(l.size_m2)}</td>'
+        f'<td class="num">{_eur(ppm2)}</td>'
         f'<td class="num">{_fmt(l.rooms)}</td>'
         f'{min_cell}'
         f'<td class="num">{_fmt(l.centre_km)}</td>'
@@ -134,7 +151,7 @@ def render_html(listings: list, title: str = "Madrid property search",
     c = {**_default_controls(ordered), **(controls or {})}
     dest = c.get("destination") or ""
     has_transit = c["has_transit"]
-    ncols = 8 if has_transit else 7
+    ncols = 9 if has_transit else 8  # incl. # and the €/m² column
 
     price_min = int(c["price_min"] // 10000 * 10000)
     price_max = int(-(-c["price_max"] // 10000) * 10000)  # round up
@@ -183,6 +200,9 @@ def render_html(listings: list, title: str = "Madrid property search",
   tr.data td {{ border-bottom:none; }}
   tr.loc td {{ color:#777; font-size:.72rem; padding-top:0; padding-bottom:12px; }}
   .tag {{ color:#888; font-size:.78rem; }}
+  th.sortable {{ cursor:pointer; user-select:none; white-space:nowrap; }}
+  th.sortable:hover {{ background:#ececf0; }}
+  .arrow {{ color:#0a64c2; font-size:.72rem; }}
 </style>
 </head>
 <body>
@@ -212,8 +232,14 @@ def render_html(listings: list, title: str = "Madrid property search",
 <main>
   <table>
     <thead><tr>
-      <th class="num">#</th><th>Price</th><th class="num">m²</th><th class="num">bed</th>
-      {'<th class="num">min</th>' if has_transit else ''}<th class="num">km</th><th>Source</th><th>Link</th>
+      <th class="num">#</th>
+      <th class="sortable" data-key="price">Price <span class="arrow"></span></th>
+      <th class="num sortable" data-key="size">m² <span class="arrow"></span></th>
+      <th class="num sortable" data-key="ppm2">€/m² <span class="arrow"></span></th>
+      <th class="num sortable" data-key="beds">bed <span class="arrow"></span></th>
+      {'<th class="num sortable" data-key="min">min <span class="arrow"></span></th>' if has_transit else ''}
+      <th class="num sortable" data-key="km">km <span class="arrow"></span></th>
+      <th>Source</th><th>Link</th>
     </tr></thead>
     <tbody>
 {rows_html}
@@ -224,7 +250,8 @@ def render_html(listings: list, title: str = "Madrid property search",
 const $ = id => document.getElementById(id);
 const priceEl=$('price'), minsEl=$('mins'), kmEl=$('km');
 const fmtP = n => '\\u20ac' + (+n).toLocaleString('en-US');
-const allRows = [...document.querySelectorAll('tr.data')];
+const tbody = document.querySelector('tbody');
+const allRows = [...tbody.querySelectorAll('tr.data')];
 function activeSources() {{
   return new Set([...document.querySelectorAll('.src:checked')].map(c => c.value));
 }}
@@ -236,7 +263,8 @@ function render() {{
   if (minsEl) $('minVal').textContent = maxM;
   $('kmVal').textContent = maxK.toFixed(1);
   let n = 0;
-  allRows.forEach(tr => {{
+  // Iterate in current DOM order so numbering follows any active sort.
+  tbody.querySelectorAll('tr.data').forEach(tr => {{
     const p=tr.dataset.price, m=tr.dataset.min, k=tr.dataset.km;
     const rs=(tr.dataset.src||'').split(' ').filter(Boolean);
     const show = (p===''||+p<=maxP) && (k===''||+k<=maxK) && (m===''||+m<=maxM)
@@ -248,6 +276,31 @@ function render() {{
   }});
   $('count').textContent = n + ' of ' + allRows.length + ' shown';
 }}
+
+// --- Click-to-sort (keeps each data row + its location row together) ---
+let sortKey=null, sortDir=1;
+function sortBy(key) {{
+  sortDir = (sortKey === key) ? -sortDir : 1;
+  sortKey = key;
+  const pairs = allRows.map(tr => [tr, tr.nextElementSibling]);
+  pairs.sort((a, b) => {{
+    const va=a[0].dataset[key], vb=b[0].dataset[key];
+    const ea=(va===undefined||va===''), eb=(vb===undefined||vb==='');
+    if (ea && eb) return 0;
+    if (ea) return 1;          // missing values always sort last
+    if (eb) return -1;
+    return (parseFloat(va) - parseFloat(vb)) * sortDir;
+  }});
+  pairs.forEach(([d, loc]) => {{ tbody.appendChild(d); if (loc) tbody.appendChild(loc); }});
+  document.querySelectorAll('th.sortable').forEach(th => {{
+    th.querySelector('.arrow').textContent =
+      (th.dataset.key === sortKey) ? (sortDir > 0 ? '\\u25B2' : '\\u25BC') : '';
+  }});
+  render();
+}}
+document.querySelectorAll('th.sortable').forEach(th =>
+  th.addEventListener('click', () => sortBy(th.dataset.key)));
+
 [priceEl, minsEl, kmEl].forEach(el => el && el.addEventListener('input', render));
 document.querySelectorAll('.src').forEach(c => c.addEventListener('change', render));
 render();

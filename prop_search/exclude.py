@@ -1,9 +1,11 @@
-"""Manual exclusions: drop specific listings by id or by area/neighborhood.
+"""Manual exclusions: drop listings by id, by area/neighborhood, or by a phrase
+in the description.
 
-Used for one-off removals (e.g. a listing whose description looks like a scam)
-and for ruling out neighborhoods. Area matching is accent- and case-insensitive
-substring matching against the listing's location text (so "lavapies" matches
-"Lavapiés-Embajadores").
+Used for one-off removals. Area matching is accent- and case-insensitive
+substring matching against the location (so "lavapies" matches
+"Lavapiés-Embajadores"). Phrase matching is word-boundary matching against the
+description+location — for mis-listed properties whose structured data says
+Madrid but whose text reveals another town (e.g. a house "en Turre", Almería).
 """
 
 from __future__ import annotations
@@ -31,10 +33,13 @@ def apply_exclusions(
     listings: list,
     exclude_ids: list[str] | None,
     exclude_areas: list[str] | None,
+    exclude_phrases: list[str] | None = None,
 ) -> list:
-    """Drop listings matching an excluded id or area."""
+    """Drop listings matching an excluded id, area, or description phrase."""
     ids = {str(i) for i in (exclude_ids or [])}
     areas = [_norm(a) for a in (exclude_areas or []) if a]
+    phrase_res = [re.compile(r"\b" + re.escape(_norm(p)) + r"\b")
+                  for p in (exclude_phrases or []) if p]
 
     kept = []
     for item in listings:
@@ -43,5 +48,9 @@ def apply_exclusions(
         location = _norm(item.location)
         if any(area in location for area in areas):
             continue
+        if phrase_res:
+            blob = _norm(f"{item.details} {item.location}")
+            if any(pat.search(blob) for pat in phrase_res):
+                continue
         kept.append(item)
     return kept
