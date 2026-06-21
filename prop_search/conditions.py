@@ -23,10 +23,17 @@ def _norm(text: object) -> str:
 # "libre de okupas", "plena propiedad").
 _PATTERNS: list[tuple[str, re.Pattern]] = [
     ("nuda_propiedad", re.compile(r"nuda\s*propiedad")),
-    # rented out: "con inquilinos", "se encuentra alquilado", "vivienda alquilada"
-    # ("alquilad[ao]s?" is the participle; infinitive "alquilar"/noun "alquiler"
-    # — e.g. "ideal para alquilar" — are intentionally NOT matched).
-    ("tenants", re.compile(r"con\s+inquilin|\balquilad[ao]s?\b")),
+    # rented out, in several phrasings seen in the wild:
+    #   "con inquilinos", "se encuentra alquilado", "vivienda arrendada",
+    #   "familia residiendo", "contrato de alquiler/arrendamiento en vigor",
+    #   "fin de contrato / termina el contrato ...".
+    # Participles only (alquilad[ao]/arrendad[ao]); infinitive "alquilar" / noun
+    # "alquiler" ("ideal para alquilar") are NOT matched. "arrendatario" is left
+    # out on purpose ("libre de arrendatarios" = becoming vacant).
+    ("tenants", re.compile(
+        r"con\s+inquilin|\balquilad[ao]s?\b|\barrendad[ao]s?\b|residiend|"
+        r"contrato\s+de\s+(arrendamiento|alquiler)|"
+        r"(termina|finaliza|vence|vencimiento|fin)[^.]{0,25}\bcontrato")),
     # squatter / no-possession: "okupado", "ocupación ilegal", "sin posesión",
     # or "ocupado/ocupada" — but NOT "desocupado" (vacant, word boundary), "no
     # ocupado", or "ocupada por el/su/los propietario(s)" (owner-occupied).

@@ -147,6 +147,11 @@ def test_excluded_condition_detection():
     assert excluded_condition("Actualmente el piso se encuentra alquilado") == "tenants"
     assert excluded_condition("Vivienda alquilada, ideal para inversor") == "tenants"
     assert excluded_condition("Piso ideal para alquilar, gran rentabilidad") is None
+    # more rented phrasings (no "alquilado"/"inquilino" word)
+    assert excluded_condition("tiene a una familia residiendo que termina el contrato el 23 de julio") == "tenants"
+    assert excluded_condition("vivienda arrendada con contrato en vigor") == "tenants"
+    assert excluded_condition("con contrato de alquiler vigente hasta 2027") == "tenants"
+    assert excluded_condition("se vende con contrato de arras antes de junio") is None
     # squatter / no-possession variants
     assert excluded_condition("Inmueble okupado, oportunidad") == "squatters"
     assert excluded_condition("Se transmite sin posesión") == "squatters"
@@ -217,6 +222,18 @@ def test_exclude_phrase_in_description():
                             exclude_phrases=["turre"])
     # 'turre' dropped; 'Calle de Toledo' kept (word-boundary, no false positive)
     assert [k.id for k in kept] == ["mad", "ok"]
+
+
+def test_exclude_phrase_far_madrid_district():
+    # Fake-central structured location, true location in description.
+    listings = [
+        L(id="vv", location="Calle Gilena, Cortes - Huertas",
+          details="85 m2 construidos, situada en Villaverde, zona consolidada"),
+        L(id="ok", location="Cortes - Huertas", details="Piso reformado en el centro"),
+    ]
+    kept = apply_exclusions(listings, exclude_ids=[], exclude_areas=[],
+                            exclude_phrases=["villaverde"])
+    assert [k.id for k in kept] == ["ok"]
 
 
 def test_haversine_and_centre_filter():

@@ -57,8 +57,10 @@ class SearchConfig:
     )
     exclude_areas: list[str] = field(default_factory=lambda: ["lavapies"])
     # Description phrases (word-boundary) for mis-listed properties whose
-    # structured data claims Madrid but whose text reveals another town.
-    exclude_phrases: list[str] = field(default_factory=lambda: ["turre"])
+    # structured location/coords are (often fake) central but whose text reveals
+    # the true location is elsewhere — another town ("Turre") or a far Madrid
+    # district outside the radius ("Villaverde").
+    exclude_phrases: list[str] = field(default_factory=lambda: ["turre", "villaverde"])
 
     # --- Geo filters (applied client-side after geocoding) ---
     centre_lat: float = MADRID_CENTRE_LAT
