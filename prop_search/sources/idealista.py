@@ -82,13 +82,32 @@ def _location(item: dict) -> Optional[str]:
     return ", ".join(seen) or None
 
 
+# idealista exposes occupancy as a structured label (authoritative, and works
+# even though descriptions come back in English). Normalise to the canonical
+# Spanish phrases so the shared condition filter (conditions.py) catches them.
+_LABEL_PHRASES = {
+    "occupation.tenanted": "alquilado con inquilinos",
+    "occupation.bareownership": "nuda propiedad",
+    "occupation.illegallyoccupied": "ocupado ilegalmente",
+}
+
+
+def _label_phrases(item: dict) -> str:
+    out = []
+    for label in (item.get("labels") or []):
+        phrase = _LABEL_PHRASES.get((label.get("name") or "").lower())
+        if phrase:
+            out.append(phrase)
+    return " ".join(out)
+
+
 def _to_listing(item: dict) -> Listing:
-    # Combine the title and description so condition detection (e.g. "nuda
-    # propiedad") sees all available text.
+    # Combine the title, description and normalised occupancy labels so the
+    # shared condition detection sees all available signals.
     suggested = item.get("suggestedTexts")
     title = suggested.get("title") if isinstance(suggested, dict) else None
     body = first(item, "details", "subtitle", "description") or ""
-    details = " ".join(p for p in (title, body) if p)
+    details = " ".join(p for p in (title, body, _label_phrases(item)) if p)
     lat, lng = _coords(item)
     return Listing(
         source="idealista",
