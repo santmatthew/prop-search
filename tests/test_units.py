@@ -60,6 +60,20 @@ def test_idealista_to_listing():
     assert out.lat == 40.42 and out.lng == -3.69
 
 
+def test_idealista_occupancy_labels_caught():
+    # idealista descriptions come back in English; the structured occupancy
+    # label is normalised to Spanish so the condition filter catches it.
+    out = idealista_to_listing({
+        "propertyCode": "111440331",
+        "price": 315000, "size": 90, "rooms": 2,
+        "suggestedTexts": {"title": "Flat in Calle de Galileo, Arapiles, Madrid"},
+        "description": "FANTASTIC INVESTMENT! Currently rented as a commercial space.",
+        "labels": [{"name": "occupation.tenanted", "text": "Rented"}],
+        "latitude": 40.43, "longitude": -3.71,
+    })
+    assert excluded_condition(out.details) == "tenants"
+
+
 def test_fotocasa_to_listing():
     out = fotocasa_to_listing({
         "id": 189660685,
