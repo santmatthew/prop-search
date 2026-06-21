@@ -224,6 +224,18 @@ def test_exclude_phrase_in_description():
     assert [k.id for k in kept] == ["mad", "ok"]
 
 
+def test_exclude_phrase_far_madrid_district():
+    # Fake-central structured location, true location in description.
+    listings = [
+        L(id="vv", location="Calle Gilena, Cortes - Huertas",
+          details="85 m2 construidos, situada en Villaverde, zona consolidada"),
+        L(id="ok", location="Cortes - Huertas", details="Piso reformado en el centro"),
+    ]
+    kept = apply_exclusions(listings, exclude_ids=[], exclude_areas=[],
+                            exclude_phrases=["villaverde"])
+    assert [k.id for k in kept] == ["ok"]
+
+
 def test_haversine_and_centre_filter():
     assert 1.0 < haversine_km(40.4168, -3.7038, 40.4076, -3.6908) < 2.0
     kept = filter_by_centre(
